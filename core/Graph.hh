@@ -1046,7 +1046,7 @@ namespace Peregrine
         }
 
         // turn off conditions:
-        // result = {};
+        result = {};
 
         cond_adj.resize(query_graph.num_vertices());
         for (const auto &cond : result)

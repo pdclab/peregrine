@@ -1,11 +1,11 @@
-<img src="https://user-images.githubusercontent.com/47194770/78506209-e73ca880-772c-11ea-9fc1-790713527bc9.png" alt="Peregrine" width="100%">
+<img src="https://user-images.githubusercontent.com/47194770/78506209-e73ca880-772c-11ea-9fc1-790713527bc9.png" alt="Peregrine" width="70%">
 
 # Peregrine: A Pattern-Aware Graph Mining System
 
 Peregrine is an efficient, single-machine system for performing data mining tasks on large graphs. Some graph mining applications include:
 * Finding frequent subgraphs
 * Generating the motif/graphlet distribution
-* Finding all occurrences of a subgraph 
+* Finding all occurrences of a subgraph
 
 Peregrine is highly programmable, so you can easily develop your own graph mining applications using its novel, declarative, graph-pattern-centric API.
 To write a Peregrine program, you describe which graph patterns you are interested in mining, and what to do with each occurrence of those patterns. You provide the _what_ and the runtime handles the _how_.

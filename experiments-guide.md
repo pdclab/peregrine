@@ -8,15 +8,7 @@ and clone this repository.
 
 Unfortunately, we can't provide the Friendster dataset at this time due to its
 size, but the raw graph can be downloaded from
-[SNAP](https://snap.stanford.edu/data/com-Friendster.html) and converted to
-binary format as follows:
-
-```
-$ mkdir friendster
-$ cd Peregrine
-$ make convert_to_binary
-$ bin/convert_to_binary.sh friendster-edges.txt 65608367 ../friendster
-```
+[SNAP](https://snap.stanford.edu/data/com-Friendster.html).
 
 Unpack the datasets:
 
@@ -66,6 +58,15 @@ $ cd Peregrine
 $ git checkout eurosys20-experiments
 $ source tbb2019/bin/tbbvars.sh intel64
 $ make -j count fsm existence-query
+```
+
+The Friendster dataset downloaded from SNAP can be converted to binary format
+as follows:
+
+```
+$ mkdir ../friendster
+$ make convert_to_binary
+$ bin/convert_to_binary.sh ../friendster-edges.txt 130000000 ../friendster
 ```
 
 Finally, we can move on to the experiments.

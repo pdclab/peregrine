@@ -1,19 +1,34 @@
-#include <unistd.h>
-#include <assert.h>
+#include <thread>
+#include <atomic>
+#include <string>
+#include <iostream>
 #include <fstream>
+#include <sstream>
+#include <vector>
+#include <execution>
+
+#include <cassert>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/mman.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include "tbb/parallel_sort.h"
-#include <thread>
-#include <sys/mman.h>
-#include <condition_variable>
-#include <mutex>
-#include <sys/time.h>
-#include <iostream>
-#include <atomic>
-#include <chrono>
-#include <thread>
+
+#include "utils.hh"
+
+const unsigned nthreads = std::thread::hardware_concurrency();
+
+bool is_directory(const std::string &path)
+{
+  struct stat statbuf;
+  return (stat(path.c_str(), &statbuf) == 0) && S_ISDIR(statbuf.st_mode);
+}
+
+bool file_exists(const std::string &path)
+{
+  struct stat statbuf;
+  return (stat(path.c_str(), &statbuf) == 0);
+}
 
 struct adjlist {
   adjlist() : length(0), ptr(nullptr) {}
@@ -22,493 +37,426 @@ struct adjlist {
   uint32_t *ptr;
 };
 
-bool is_directory(const std::string &path)
+
+/**
+ * task_size gives the approx. number of bytes to process per thread.
+ * This is adjusted to the nearest line.
+ */
+void calculate_degree_map(unsigned thread_id, const char *graph, size_t file_size, size_t task_size, uint64_t &num_edges, std::vector<uint32_t> &degree_maps, uint32_t &max_vid)
 {
-   struct stat statbuf;
-   if (stat(path.c_str(), &statbuf) != 0)
-       return 0;
-   return S_ISDIR(statbuf.st_mode);
-}
+  std::vector<uint32_t> degree_map(100'000'000);
+  uint64_t edges = 0;
+  uint32_t max = 0;
 
+  size_t start = thread_id * task_size;
+  size_t end = start + task_size;
 
-uint64_t max_thread_count = std::thread::hardware_concurrency();
-std::string delimiters = " ,\t";
-uint64_t MAX_V_ID=130'000'000;
-std::vector<std::vector<uint32_t>> per_thread_degree_map(max_thread_count);
-std::vector<uint32_t *> per_thread_edge_list(max_thread_count);
-std::vector<uint32_t> per_thread_edge_cursor(max_thread_count,0);
-std::vector<std::pair<uint32_t,uint32_t>> degree_map;
-std::vector<uint32_t> all_degree;
-std::vector<uint32_t> vertex_adj_map;
-std::vector<uint32_t> vertex_degree_map;
-std::vector<uint32_t> vertex_start_offset;
-adjlist *data_graph;
-uint32_t vertex_id=1;
-size_t bytes_written;
-
-template<typename T>
-void empty_swap(std::vector<T>& vec) {
-   std::vector<T>().swap(vec);
-}
-
-void calculate_degree_map(uint32_t thread_id, uint64_t file_block_size, char* graph_data, uint32_t num_vertices){
-  per_thread_degree_map[thread_id].resize(num_vertices,0);
-  uint64_t cursor_start = thread_id*file_block_size;
-  uint64_t cursor_end = (thread_id+1)*file_block_size;
-  if(thread_id!=0){
-    while(graph_data[cursor_start] != '\n') cursor_start++;
-    cursor_start++;
+  // don't start from middle of a line in the file
+  if (nthreads == 1 || thread_id != 0)
+  {
+    while (start <= file_size && graph[start-1] != '\n') ++start;
   }
-  if(thread_id!=max_thread_count-1){
-    while(graph_data[cursor_end] != '\n') cursor_end++;
-  }
-  while (cursor_start < cursor_end){
-    std::string a = "";
-    std::string b = "";
-    uint32_t s1, s2;
-    while (graph_data[cursor_start] == '#'){
-      while (graph_data[cursor_start] != '\n')
-      cursor_start++;
-      cursor_start++;
-    }
-    while (delimiters.find(graph_data[cursor_start]) == std::string::npos){
-      a += graph_data[cursor_start];
-      cursor_start++;
-    }
-    while (delimiters.find(graph_data[cursor_start]) != std::string::npos)
-      cursor_start++;
-    while (graph_data[cursor_start] != '\n'){
-      b += graph_data[cursor_start];
-      cursor_start++;
-    }
-    cursor_start++;
-    s1 = std::atoi(a.c_str());
-    s2 = std::atoi(b.c_str());
-    if (s1 > s2 ){
-      uint32_t temp = s1;
-      s1 = s2;
-      s2 = temp;
-    }
 
-    if (s2 >= MAX_V_ID)
+  uint32_t u, v;
+  size_t cursor = start;
+  while (cursor < end)
+  {
+    // find the end of this edge
+    size_t line_end = cursor;
+    while (line_end < file_size && graph[line_end] != '\n') ++line_end;
+
+    if (line_end >= file_size) break;
+
+    // read the vertices from it
+    std::string line(&graph[cursor], &graph[line_end]);
+
+    cursor = line_end+1;
+
+    if (line[0] == '#') continue;
+
+    std::istringstream iss(line);
+    iss >> u >> v;
+
+    max = std::max(max, std::max(u, v));
+
+    // make sure we have space in the degree map
+    if (max > degree_map.size()) degree_map.resize(max+1);
+
+    // ignore loops
+    if (u != v)
     {
-      std::cerr << "ERROR: Observed a vertex in the edge list with ID " << s2 << " > maximum vertex ID " << MAX_V_ID-1 << "." << std::endl;
-      std::cerr << "Exiting..." << std::endl;
-      exit(-1);
+      // count edges you've seen
+      edges += 1;
+      degree_map[u] += 1;
+      degree_map[v] += 1;
     }
+  }
 
+  // return thread-local degree map
+  num_edges = edges;
+  max_vid = max;
+  degree_maps.swap(degree_map);
+}
 
-    if(s1!=s2){
-      per_thread_degree_map[thread_id][s1]++;
-      per_thread_degree_map[thread_id][s2]++;
+/**
+ * task_size gives the approx. number of bytes to process per thread.
+ * This is adjusted to the nearest line.
+ */
+void populate_graph(unsigned thread_id, const char *edges, size_t file_size, size_t task_size, adjlist *graph, const std::vector<uint32_t> &ids_rev_map)
+{
+  size_t start = thread_id * task_size;
+  size_t end = start + task_size;
+
+  // don't start from middle of a line in the file
+  if (nthreads == 1 || thread_id != 0)
+  {
+    while (start <= file_size && edges[start-1] != '\n') ++start;
+  }
+
+  uint32_t u, v;
+  size_t cursor = start;
+  while (cursor < end)
+  {
+    // find the end of this edge
+    size_t line_end = cursor;
+    while (line_end < file_size && edges[line_end] != '\n') ++line_end;
+
+    if (line_end >= file_size) break;
+
+    // read the vertices from it
+    std::string line(&edges[cursor], &edges[line_end]);
+
+    cursor = line_end+1;
+
+    if (line[0] == '#') continue;
+
+    std::istringstream iss(line);
+    iss >> u >> v;
+
+    // ignore loops
+    if (u != v)
+    {
+      uint32_t uu = ids_rev_map[u];
+      uint32_t vv = ids_rev_map[v];
+      uint32_t u_pos = graph[uu].length++;
+      // have to live with the 1-based vertex ID's forever...
+      graph[uu].ptr[u_pos] = vv+1;
+      uint32_t v_pos = graph[vv].length++;
+      graph[vv].ptr[v_pos] = uu+1;
     }
   }
 }
 
-void populate_data_graph(uint32_t thread_id, uint64_t file_block_size, char* graph_data){
+void write_local(unsigned thread_id, const adjlist *graph, uint32_t num_vertices, uint32_t task_size, const std::string &out_dir)
+{
 
-  uint64_t cursor_start = thread_id*file_block_size;
-  uint64_t cursor_end = (thread_id+1)*file_block_size;
-  if(thread_id!=0){
-    while(graph_data[cursor_start] != '\n') cursor_start++;
-    cursor_start++;
+  uint32_t start = thread_id * task_size;
+  uint32_t end = std::min(start + task_size, num_vertices);
+
+  if (thread_id == nthreads - 1)
+  {
+    end = num_vertices;
   }
-  if(thread_id!=max_thread_count-1){
-    while(graph_data[cursor_end] != '\n') cursor_end++;
-  }
-  if(thread_id==0){
-    while (graph_data[cursor_start] == '#'){
-      while (graph_data[cursor_start] != '\n')
-        cursor_start++;
-      cursor_start++;
-    }
-  }
-  while (cursor_start < cursor_end){
-    std::string a = "";
-    std::string b = "";
-    uint32_t s1, s2;
-    //skip comments
-    while (delimiters.find(graph_data[cursor_start]) == std::string::npos){
-      a += graph_data[cursor_start];
-      cursor_start++;
-    }
-    while (delimiters.find(graph_data[cursor_start]) != std::string::npos)
-      cursor_start++;
-    while (graph_data[cursor_start] != '\n'){
-      b += graph_data[cursor_start];
-      cursor_start++;
-    }
-    cursor_start++;
-    s1 = std::atoi(a.c_str());
-    s2 = std::atoi(b.c_str());
-    if(s1!=s2){
-      uint32_t curr_pos_s2 = data_graph[vertex_adj_map[s2]].length++;
-      data_graph[vertex_adj_map[s2]].ptr[curr_pos_s2] = s1;
-      uint32_t curr_pos_s1 = data_graph[vertex_adj_map[s1]].length++;
-      data_graph[vertex_adj_map[s1]].ptr[curr_pos_s1] = s2;
-    }
-    else{
-        std::cout<<"Loop Found "<<s1<<std::endl;
-    }
+
+  std::string out_path(out_dir + "/data_" + std::to_string(thread_id) + ".bin");
+  std::ofstream output(out_path.c_str(), std::ios::binary | std::ios::trunc);
+
+  for (uint32_t v = start; v < end; ++v)
+  {
+    uint32_t deg = graph[v].length.load(std::memory_order_relaxed);
+    //output << reinterpret_cast<const char *>(v) << deg;
+    //output.write(reinterpret_cast<const char *>(v), sizeof(v));
+    output.write(reinterpret_cast<const char *>(&deg), sizeof(deg));
+    output.write(reinterpret_cast<const char *>(graph[v].ptr), deg*sizeof(uint32_t));
   }
 }
 
-void write_graph_to_disk(uint32_t start, uint32_t end, int adj_file,std::atomic<uint32_t> &edge_count,std::atomic<uint32_t> &data_count){
-    uint64_t curr_vertex_offset = 0;
-    if(start == 0) curr_vertex_offset = vertex_start_offset[0]*4;
-    uint64_t max_buffer = 3*256*512*512;
-    uint32_t *stage = new uint32_t[max_buffer+1];
-    uint32_t stage_cursor = 0;
-    uint32_t local_data_count=0;
-    uint32_t local_edge_count=0;
-    for(uint32_t i = start; i < end; i++){
-      uint32_t curr_v = vertex_adj_map[degree_map[i].first];
-      uint32_t source = vertex_degree_map[degree_map[i].first];
-      uint32_t degree = degree_map[i].second;
-      uint32_t new_degree = degree;
-      local_edge_count+=new_degree;
 
-      stage[stage_cursor] = source;
-      stage_cursor++;
-
-      local_data_count++;
-
-      stage[stage_cursor] = new_degree;
-      stage_cursor++;
-
-      local_data_count++;
-
-      for(uint32_t j = 0; j < new_degree;j++){
-        local_data_count++;
-        stage[stage_cursor] = data_graph[curr_v].ptr[j];
-        stage_cursor++;
-      }
-
-      if(stage_cursor > 512*512*512){
-        bytes_written = pwrite(adj_file,stage,sizeof(uint32_t)*(stage_cursor),curr_vertex_offset);
-        curr_vertex_offset += sizeof(uint32_t)*(stage_cursor);
-        stage_cursor = 0;
-      }
-    }
-
-    if(stage_cursor != 0){
-      bytes_written = pwrite(adj_file,stage,sizeof(uint32_t)*(stage_cursor),curr_vertex_offset);
-    }
-    data_count += local_data_count;
-    edge_count += local_edge_count;
-
-}
-
-int main(int argc, char* argv[]){
-  if(argc < 4){
-    std::cout<<"Usage : " << argv[0] << " <input edge file> [input label file] <max vertex ID> <output directory>"<<std::endl;
-    exit(0);
-  }
-
-  std::string data_graph_path(argv[1]);
-  std::string outdir;
-  std::string label_path;
-  if (argc == 4)
+int main(int argc, char *argv[])
+{
+  if (argc < 3)
   {
-    // no labels
-    MAX_V_ID = std::atoi(argv[2]) + 1;
-    outdir = argv[3];
+    std::cout
+      << "USAGE: " << argv[0]
+      << " <input edge file> [input label file] <output directory>"
+      << std::endl;
+    return -1;
   }
-  else
+
+  std::string edge_file(argv[1]);
+  std::string label_file(argc == 4 ? argv[2] : "");
+  std::string out_dir(argc == 4 ? argv[3] : argv[2]);
+
+  if (!file_exists(edge_file))
   {
-    label_path = argv[2];
-    MAX_V_ID = std::atoi(argv[3]) + 1;
-    outdir = argv[4];
+    std::cerr
+      << "ERROR: " << edge_file << " could not be opened."
+      << std::endl;
+    return -1;
   }
-
-  if (!is_directory(outdir))
+  else if (argc == 4 && !file_exists(label_file))
   {
-    std::cerr << "ERROR: " << outdir << " is not a directory." << std::endl;
-    std::cerr << "Exiting..." << std::endl;
-    exit(-1);
+    std::cerr
+      << "ERROR: " << label_file << " could not be opened."
+      << std::endl;
+    return -1;
   }
-
-  // check for MAX_V_ID overflow
-  if (MAX_V_ID-1 >= static_cast<uint32_t>(-1))
+  else if (!is_directory(out_dir))
   {
-    std::cerr << "ERROR: Provided maximum vertex ID overflows." << std::endl;
-    std::cerr << "Exiting..." << std::endl;
-    exit(-1);
+    std::cerr
+      << "ERROR: " << out_dir << " is not a valid directory."
+      << std::endl;
+    return -1;
   }
 
-  char* graph_data;
+  auto t1 = utils::get_timestamp();
 
-  std::chrono::steady_clock::time_point begin,end,g_begin,g_end;
-  std::thread workers[max_thread_count];
-  g_begin = std::chrono::steady_clock::now();
+  struct stat edge_file_stat;
+  int edge_fd = open(edge_file.c_str(), O_RDONLY, 0);
+  assert(edge_fd != -1);
 
-  struct stat st;
+  assert(fstat(edge_fd, &edge_file_stat) == 0);
 
-  begin = std::chrono::steady_clock::now();
+  size_t edge_file_size = edge_file_stat.st_size;
+  char *graph_data = static_cast<char*>(mmap(NULL,
+        edge_file_size,
+        PROT_READ,
+        MAP_PRIVATE | MAP_POPULATE,
+        edge_fd,
+        0));
 
-  stat(data_graph_path.c_str(), &st);
-  size_t input_file_size = st.st_size;
-  std::cout<<"Size of file is "<<input_file_size<<std::endl;
-  int fd = open(data_graph_path.c_str(), O_RDONLY, 0);
-  assert(fd != -1);
+  auto t2 = utils::get_timestamp();
+  std::cout << "Read edge-list in " << (t2-t1)/1e6 << "s" << std::endl;
 
-  graph_data = static_cast<char*>(mmap(NULL, input_file_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, fd, 0));
-  assert(graph_data != MAP_FAILED);
-  end = std::chrono::steady_clock::now();
-    std::cout << "Time Taken for memory mapping the file : " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
-  uint64_t file_block_size = input_file_size/max_thread_count;
-  begin = std::chrono::steady_clock::now();
 
-  for(int i = 0; i < max_thread_count; i++) {
-    workers[i] = std::thread(calculate_degree_map,i,file_block_size,graph_data, MAX_V_ID);
-  }
-
-  for(int i = 0; i < max_thread_count; i++) workers[i].join();
-
-  uint64_t total_degree=0;
-  all_degree.resize(MAX_V_ID,0);
-  vertex_degree_map.resize(MAX_V_ID,0);
-  vertex_adj_map.resize(MAX_V_ID,0);
-  std::cout<<"degree map calculated per thread"<<std::endl;
-  end = std::chrono::steady_clock::now();
-  std::cout << "Time Taken degree calculation per thread " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
-  begin = std::chrono::steady_clock::now();
-
-  for(uint32_t thread_id = 0; thread_id < max_thread_count;thread_id++){
-    for(uint32_t j = 0; j < per_thread_degree_map[thread_id].size(); j++){
-      uint32_t curr_source = j;
-      uint32_t curr_degree = per_thread_degree_map[thread_id][j];
-      total_degree += curr_degree;
-      all_degree[j] += curr_degree;
+  // calculate degree maps
+  std::vector<uint64_t> edge_counts(nthreads);
+  std::vector<std::vector<uint32_t>> degree_maps(nthreads);
+  std::vector<uint32_t> max_vids(nthreads);
+  auto t3 = utils::get_timestamp();
+  {
+    size_t task_size = edge_file_size / nthreads;
+    std::vector<std::thread> pool;
+    for (unsigned i = 0; i < nthreads; ++i)
+    {
+      pool.emplace_back(calculate_degree_map, i, graph_data, edge_file_size,
+          task_size,
+          std::ref(edge_counts[i]),
+          std::ref(degree_maps[i]),
+          std::ref(max_vids[i]));
     }
-    empty_swap(per_thread_degree_map[thread_id]);
-  }
 
-  for(uint32_t i = 0; i < MAX_V_ID;i++){
-    if(all_degree[i]!=0){
-      vertex_degree_map[i] = vertex_id;
-      vertex_adj_map[i] = vertex_id-1;
-      degree_map.push_back({i,all_degree[i]});
-      vertex_id++;
+    for (auto &th : pool)
+    {
+      th.join();
     }
   }
-  empty_swap(all_degree);
 
-  end = std::chrono::steady_clock::now();
-  std::cout << "Time Taken global degree calculation  " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
+  uint32_t max_vid = *std::max_element(max_vids.cbegin(), max_vids.cend());
 
+  // find biggest per-thread degree map to use as the final degree map
+  std::vector<uint32_t> &degree_map = *std::max_element(degree_maps.begin(),
+      degree_maps.end(),
+      [](auto &v1, auto &v2) { return v1.size() < v2.size(); });
 
-  std::cout<<"degree map calculated"<<std::endl;
-  std::cout<<"Number of vertices : "<<vertex_id-1<<std::endl;
-  std::cout<<"Total Degree : "<<total_degree<<std::endl;
-  begin = std::chrono::steady_clock::now();
+  degree_map.resize(max_vid+1);
 
-  // for(int i = 0; i < max_thread_count; i++){
-  //     workers[i] = std::thread(populate_data_graph,i,file_block_size);
-  // }
-  // for(int i = 0; i < max_thread_count; i++) workers[i].join();
-
-
-
-
-  data_graph = new adjlist[vertex_id-1];
-  tbb::parallel_for( tbb::blocked_range<int>(0,vertex_id-1),
-             [&](tbb::blocked_range<int> r){
-    for(int i = r.begin(); i < r.end(); ++i){
-      data_graph[i].ptr = new uint32_t[degree_map[i].second];
-      data_graph[i].length = 0;
-    }
-  });
-
-  for(int i=0;i<max_thread_count;i++){
-    workers[i] = std::thread(populate_data_graph,i,file_block_size,graph_data);
+  // sum up degrees
+  {
+    std::for_each(std::execution::par_unseq, degree_map.begin(), degree_map.end(),
+        [&degree_maps, &degree_map](uint32_t &total)
+        {
+          uint32_t v = &total - &degree_map[0];
+          uint32_t prev_total = total;
+          total = 0;
+          for (auto &map : degree_maps)
+          {
+            total += map[v];
+          }
+          total += prev_total;
+        });
   }
-  for(int i=0;i<max_thread_count;i++) workers[i].join();
 
+  uint64_t num_edges = std::accumulate(edge_counts.cbegin(), edge_counts.cend(), 0);
 
-  munmap(graph_data, input_file_size);
-  close(fd);
+  auto t4 = utils::get_timestamp();
+  std::cout << "Calculated degree map in " << (t4-t3)/1e6 << "s" << std::endl;
 
-  std::cout<<"data graph  created"<<std::endl;
+  auto t5 = utils::get_timestamp();
 
+  // initialize map from new ID to original ID
+  std::vector<uint32_t> ids_map(degree_map.size());
+  std::iota(ids_map.begin(), ids_map.end(), 0);
 
-
-  end = std::chrono::steady_clock::now();
-  std::cout << "Time Taken for populating data  " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
-  std::cout<<"data graph populated"<<std::endl;
-  tbb::parallel_sort(degree_map.begin(),degree_map.end(),
-  [=]( const std::pair< uint32_t, uint32_t >&a, const std::pair< uint32_t, uint32_t >&b ){
-    if (a.second == b.second) return a.first < b.first;
-    return a.second > b.second;
-  });
-  std::cout<<"degree map sorted"<<std::endl;
-
-  tbb::parallel_for( tbb::blocked_range<int>(0,vertex_id-1),
-             [&](tbb::blocked_range<int> r){
-    for(int i = r.begin(); i < r.end(); ++i){
-      vertex_degree_map[degree_map[i].first] = i+1;
-    }
-  });
-
-  std::cout<<"Biggest Degree of the vertex : "<<degree_map[0].first<<" "<<degree_map[0].second<<std::endl;
-  uint64_t offset=0;
-  std::atomic<uint32_t> data_count{0};
-  FILE* adj_file[max_thread_count];
-
-  for(uint32_t i = 0; i < max_thread_count; i++)
-    adj_file[i] = fopen((outdir+"/data_"+std::to_string(i)+".bin").c_str(),"wb+");
-  vertex_id--;
-  std::atomic<uint32_t> edge_count{0};
-  uint32_t vertex_start_idx = 3+vertex_id;
-  bytes_written = pwrite(fileno(adj_file[0]),&vertex_start_idx,sizeof(uint32_t),offset); // place holder for total file size
-  offset+=sizeof(uint32_t);
-  data_count++;
-  bytes_written = pwrite(fileno(adj_file[0]),&vertex_id,sizeof(uint32_t),offset); // write number of vertices
-  offset+=sizeof(uint32_t);
-  data_count++;
-  bytes_written = pwrite(fileno(adj_file[0]),&vertex_start_idx,sizeof(uint32_t),offset); // place holder for edge count
-  offset+=sizeof(uint32_t);
-  data_count++;
-
-  vertex_start_offset.resize(vertex_id,0);
-  tbb::parallel_for( tbb::blocked_range<int>(0,vertex_id),
-            [&](tbb::blocked_range<int> r){
-    uint32_t start = r.begin();
-    uint32_t end = r.end();
-    for(uint32_t i = start; i < end; i++){
-    uint32_t curr_v = vertex_adj_map[degree_map[i].first];
-    uint32_t degree = degree_map[i].second;
-    assert(degree == data_graph[curr_v].length);
-    std::vector<uint32_t> curr_neighbours;
-    curr_neighbours.resize(degree);
-    for(uint32_t k=0; k < degree; k++) curr_neighbours[k] = vertex_degree_map[data_graph[curr_v].ptr[k]];
-    std::sort(curr_neighbours.begin(),curr_neighbours.end());
-    auto last = std::unique(curr_neighbours.begin(), curr_neighbours.end());
-    curr_neighbours.erase(last,curr_neighbours.end());
-    uint32_t new_degree=curr_neighbours.size();
-    for(uint32_t j = 0; j < new_degree; j++){
-      data_graph[curr_v].ptr[j] = curr_neighbours[j];
-    }
-    data_graph[curr_v].length = new_degree;
-    degree_map[i].second = new_degree;
-    }
-  });
-
-  uint32_t* v_offset = new uint32_t[vertex_id];
-  vertex_start_offset[0] = 3+vertex_id;
-  v_offset[0] = 3+vertex_id;
-  data_count++;
-
-  for(uint32_t i=1; i < vertex_id; i++){
-    vertex_start_offset[i] = vertex_start_offset[i-1]+2+degree_map[i-1].second;
-    v_offset[i] = vertex_start_offset[i];
-    data_count++;
-  }
-  bytes_written = pwrite(fileno(adj_file[0]),v_offset,sizeof(uint32_t)*vertex_id,offset);
-  offset += sizeof(uint32_t)*vertex_id;
-  std::vector<std::pair<uint32_t,uint32_t>> v_work;
-  uint32_t v_start;
-  uint32_t uniform_e = total_degree/max_thread_count;
-  v_start = 0;
-  uint32_t curr_e_count = 0;
-  for(uint32_t i = 0; i < vertex_id; i++){
-    curr_e_count += degree_map[i].second;
-    if(curr_e_count >= uniform_e){
-      curr_e_count = 0;
-      if(v_work.size() == max_thread_count-1){
-          v_work.push_back({v_start,vertex_id});
-          break;
-      }
-      v_work.push_back({v_start,i+1});
-      v_start = i+1;
-    }
-    if(i == vertex_id - 1){
-      v_work.push_back({v_start,vertex_id});
-      break;
-    }
-  }
-  begin = std::chrono::steady_clock::now();
-  for(uint32_t i = 0; i < max_thread_count; i++){
-      workers[i] = std::thread(write_graph_to_disk,v_work[i].first,v_work[i].second,fileno(adj_file[i]),std::ref(edge_count),std::ref(data_count));
-  }
-  for(uint32_t i = 0; i < max_thread_count; i++) workers[i].join();
-  end = std::chrono::steady_clock::now();
-  std::cout << "Time Taken for writing data to disk  " << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[µs]" << std::endl;
-
-  uint32_t stage_value = data_count.load();
-  bytes_written = pwrite(fileno(adj_file[0]),&stage_value,sizeof(uint32_t),0); // fill the gap
-  stage_value = edge_count.load();
-  stage_value/=2;
-  bytes_written = pwrite(fileno(adj_file[0]),&stage_value,sizeof(uint32_t),8); // fill the gap
-  std::cout<<"Edge Count : "<<edge_count<<" "<<"Data Count : "<<data_count<<std::endl;
-  for(uint32_t i = 0; i < max_thread_count; i++) close(fileno(adj_file[i]));
-
-
-  if (argc > 4) {
-
-    std::cout<<"Preparing Labels data"<<std::endl;
-    struct stat st;
-    stat(label_path.c_str(), &st);
-    size_t labels_file_size = st.st_size;
-    std::cout<<"Size of Label file is "<<labels_file_size<<std::endl;
-    int labels_fd = open(label_path.c_str(), O_RDONLY, 0);
-    assert(labels_fd != -1);
-    FILE* labels_file = fopen((outdir+"/labels.bin").c_str(),"wb+");
-    char* labels_data = static_cast<char*>(mmap(NULL, labels_file_size, PROT_READ, MAP_PRIVATE | MAP_POPULATE, labels_fd, 0));
-    off_t labels_offset=0;
-    file_block_size = labels_file_size/max_thread_count;
-    for(uint32_t i = 0; i < max_thread_count;i++){
-      uint64_t cursor_start = i*file_block_size;
-      uint64_t cursor_end = (i+1)*file_block_size;
-      if(i!=0){
-        while(labels_data[cursor_start] != '\n') cursor_start++;
-        cursor_start++;
-      }
-      if(i!=max_thread_count-1){
-        while(labels_data[cursor_end] != '\n') cursor_end++;
-      }
-      while (cursor_start < cursor_end)
+  // sort by degree
+  std::sort(std::execution::par_unseq, ids_map.begin(), ids_map.end(),
+      [&degree_map](uint32_t u, uint32_t v)
       {
-        std::string a = "";
-        std::string b = "";
-        uint32_t s1, s2;
-        //skip comments
-        while (labels_data[cursor_start] == '#')
+        return degree_map[u] > degree_map[v];
+      });
+
+  // remove degree 0 vertices
+  ids_map.erase(std::remove_if(ids_map.begin(), ids_map.end(),
+        [&degree_map](uint32_t v) { return degree_map[v] == 0; }),
+      ids_map.end());
+  uint32_t num_vertices = ids_map.size();
+
+
+  // map from original ID to new ID
+  std::vector<uint32_t> ids_rev_map(degree_map.size(), static_cast<uint32_t>(-1));
+  {
+    std::for_each(std::execution::par_unseq, ids_map.cbegin(), ids_map.cend(),
+      [&ids_rev_map, &ids_map](const uint32_t &true_v)
+      {
+        uint32_t v = &true_v - &ids_map[0];
+        ids_rev_map[true_v] = v;
+      });
+  }
+
+  auto t6 = utils::get_timestamp();
+  std::cout << "Sorted vertices in " << (t6-t5)/1e6 << "s" << std::endl;
+
+  // initialize adjacency lists in memory
+  auto t7 = utils::get_timestamp();
+  adjlist *graph = new adjlist[num_vertices];
+  std::for_each(std::execution::par_unseq, ids_map.cbegin(), ids_map.cend(),
+      [&graph, &ids_rev_map, &degree_map](const uint32_t true_v)
+      {
+        uint32_t new_v = ids_rev_map[true_v];
+        uint32_t deg = degree_map[true_v];
+        graph[new_v].ptr = new uint32_t[deg];
+        graph[new_v].length = 0;
+      });
+
+  // clear unused memory
+  degree_maps.clear();
+
+  // populate the in-memory graph
+  {
+    size_t task_size = edge_file_size / nthreads;
+    std::vector<std::thread> pool;
+    for (unsigned i = 0; i < nthreads; ++i)
+    {
+      pool.emplace_back(populate_graph, i, graph_data, edge_file_size, task_size, graph, std::cref(ids_rev_map));
+    }
+
+    for (auto &th : pool)
+    {
+      th.join();
+    }
+
+    // don't need the edges anymore
+    munmap(graph_data, edge_file_size);
+  }
+  auto t8 = utils::get_timestamp();
+  std::cout << "Created in-memory graph in " << (t8-t7)/1e6 << "s" << std::endl;
+
+  // sort the in-memory adjacency lists
+  auto t9 = utils::get_timestamp();
+  std::for_each(std::execution::par_unseq, ids_map.cbegin(), ids_map.cend(),
+      [&graph, &ids_rev_map](uint32_t true_v)
+      {
+        uint32_t v = ids_rev_map[true_v];
+        std::sort(std::execution::unseq, graph[v].ptr, graph[v].ptr + graph[v].length);
+      });
+  auto t10 = utils::get_timestamp();
+  std::cout << "Sorted adjacency lists in " << (t10-t9)/1e6 << "s" << std::endl;
+
+  // write thread-local files
+  auto t11 = utils::get_timestamp();
+  {
+    uint32_t task_size =  num_vertices / nthreads;
+    std::vector<std::thread> pool;
+    for (unsigned i = 0; i < nthreads; ++i)
+    {
+      pool.emplace_back(write_local, i, graph, num_vertices, task_size, std::ref(out_dir));
+    }
+
+    for (auto &th : pool)
+    {
+      th.join();
+    }
+  }
+  auto t12 = utils::get_timestamp();
+  std::cout << "Wrote data to disk in " << (t12-t11)/1e6 << "s" << std::endl;
+
+  auto t13 = utils::get_timestamp();
+  // clean up in memory graph
+  for (uint32_t i = 0; i < num_vertices; ++i)
+  {
+    delete[] graph[i].ptr;
+  }
+  delete[] graph;
+
+  // concatenate thread local files
+  {
+    std::string output_path(out_dir + "/data.bin");
+    {
+      std::ofstream output(output_path.c_str(), std::ios::binary | std::ios::trunc);
+      // write header first:
+      // - number of vertices in the graph
+      // - number of edges in the graph
+      output.write(reinterpret_cast<const char *>(&num_vertices), sizeof(num_vertices));
+      output.write(reinterpret_cast<const char *>(&num_edges), sizeof(num_edges));
+    }
+
+    // now merge the thread-local files, deleting as you go
+    for (unsigned i = 0; i < nthreads; ++i)
+    {
+      std::string thread_local_path(out_dir + "/data_" + std::to_string(i) + ".bin");
+      {
+        std::ifstream input(thread_local_path.c_str(), std::ios::binary);
+        std::ofstream output(output_path.c_str(), std::ios::binary | std::ios::app);
+        output << input.rdbuf();
+      }
+      std::remove(thread_local_path.c_str());
+    }
+  }
+  auto t14 = utils::get_timestamp();
+  std::cout << "Concatenated output in " << (t14-t13)/1e6 << "s" << std::endl;
+
+  // associate labels if they exist
+  if (file_exists(label_file))
+  {
+    auto t15 = utils::get_timestamp();
+    {
+      std::ifstream ifile(label_file.c_str());
+
+      std::string output_labels(out_dir + "/labels.bin");
+      std::ofstream ofile(output_labels.c_str(), std::ios::binary | std::ios::trunc);
+
+      std::string line;
+      while (std::getline(ifile, line))
+      {
+        // easy to predict properly
+        if (line[0] == '#') continue;
+        std::istringstream iss(line);
+
+        uint32_t u;
+        uint32_t new_u_label[2];
+        iss >> u >> new_u_label[1];
+        new_u_label[0] = ids_rev_map[u]+1;
+
+        if (new_u_label[0] != 0) // ids_rev_map[u] != -1
         {
-          while (labels_data[cursor_start] != '\n')
-          cursor_start++;
-          cursor_start++;
+          ofile.write(reinterpret_cast<char *>(&new_u_label[0]), 2*sizeof(uint32_t));
         }
-        while (delimiters.find(labels_data[cursor_start]) == std::string::npos)
-        {
-          a += labels_data[cursor_start];
-          cursor_start++;
-        }
-        while (delimiters.find(labels_data[cursor_start]) != std::string::npos) cursor_start++;
-        while (labels_data[cursor_start] != '\n')
-        {
-          b += labels_data[cursor_start];
-          cursor_start++;
-        }
-        cursor_start++;
-        s1 = std::atoi(a.c_str());
-        s2 = std::atoi(b.c_str());
-        uint32_t curr_vertex = vertex_degree_map[s1];
-        if(curr_vertex!=0){
-	bytes_written = pwrite(fileno(labels_file),&curr_vertex,sizeof(uint32_t),labels_offset);
-        labels_offset+=sizeof(uint32_t);
-        bytes_written = pwrite(fileno(labels_file),&s2,sizeof(uint32_t),labels_offset);
-        labels_offset+=sizeof(uint32_t);
-}
       }
     }
-    munmap(labels_data, labels_file_size);
-    close(labels_fd);
-    close(fileno(labels_file));
-
+    auto t16 = utils::get_timestamp();
+    std::cout << "Converted labels to binary format in " << (t16-t15)/1e6 << "s" << std::endl;
   }
-g_end = std::chrono::steady_clock::now();
-  std::cout << "Total Time Taken : " << std::chrono::duration_cast<std::chrono::microseconds>(g_end - g_begin).count() << "[µs]" << std::endl;
 
+  // write ID map
+  auto t17 = utils::get_timestamp();
+  {
+    std::string output_ids(out_dir + "/ids.bin");
+    std::ofstream file(output_ids.c_str(), std::ios::binary | std::ios::trunc);
+    file.write(reinterpret_cast<char *>(&ids_map[0]), ids_map.size() * sizeof(uint32_t));
+  }
+  auto t18 = utils::get_timestamp();
+  std::cout << "ID map written in " << (t18-t17)/1e6 << "s" << std::endl;
+
+  std::cout << "Finished in " << (t18-t1)/1e6 << "s" << std::endl;
   return 0;
 }

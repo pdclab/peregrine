@@ -14,7 +14,8 @@
 namespace Peregrine
 {
 
-  struct adjlist {
+  struct adjlist
+  {
     adjlist() : length(0), ptr(nullptr) {}
     adjlist(uint32_t l, uint32_t *p) : length(l), ptr(p) {}
     uint32_t length;
@@ -22,22 +23,14 @@ namespace Peregrine
   };
 
 
-  class DataGraph {
+  class DataGraph
+  {
    public:
     DataGraph(std::string data_graph_path);
     DataGraph(const SmallGraph &p);
-    DataGraph(const DataGraph *other);
     DataGraph(DataGraph &&other);
     DataGraph(DataGraph &) = delete;
     ~DataGraph();
-
-    struct page_graph_stats
-    {
-      uint32_t page_size;
-      uint32_t page_count;
-      uint32_t vertex_count;
-      uint32_t edge_count;
-    } page_graph_info;
 
     void set_rbi(const AnalyzedPattern &rbi);
     void set_known_labels(const std::vector<SmallGraph> &patterns);
@@ -48,19 +41,27 @@ namespace Peregrine
     const std::vector<uint32_t> &get_lower_bounds(uint32_t v) const;
     const adjlist &get_adj(uint32_t v) const;
     uint32_t get_vgs_count() const;
+    uint32_t get_vertex_count() const;
+    uint64_t get_edge_count() const;
     const SmallGraph &get_vgs(unsigned fi) const;
     const SmallGraph &get_pattern() const;
     const std::vector<std::vector<uint32_t>> &get_qs(unsigned fi) const;
     uint32_t vmap_at(unsigned fi, uint32_t v, unsigned qsi) const;
     uint32_t label(uint32_t dv) const;
     const std::vector<uint32_t> &get_qo(uint32_t fi) const;
+    uint32_t original_id(uint32_t v) const;
+    const std::pair<uint32_t, uint32_t> &get_label_range() const;
 
     AnalyzedPattern rbi;
     uint32_t new_label;
    private:
+    uint32_t vertex_count;
+    uint64_t edge_count;
     unsigned forest_count;
     bool labelled_graph = false;
     uint32_t *labels;
+    std::pair<uint32_t, uint32_t> label_range;
+    uint32_t *ids;
     adjlist *data_graph;
     uint32_t *graph_in_memory;
     std::unordered_set<uint32_t> known_labels;

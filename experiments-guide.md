@@ -9,7 +9,14 @@ and clone this repository.
 Unfortunately, we can't provide the Friendster dataset at this time due to its
 size, but the raw graph can be downloaded from
 [SNAP](https://snap.stanford.edu/data/com-Friendster.html) and converted to
-binary format as described in the [README](README.md#3-data-graphs).
+binary format as follows:
+
+```
+$ mkdir friendster
+$ cd Peregrine
+$ make convert_to_binary
+$ bin/convert_to_binary.sh friendster-edges.txt 65608367 ../friendster
+```
 
 Unpack the datasets:
 

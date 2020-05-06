@@ -91,7 +91,7 @@ namespace Peregrine
     (void)a;
 
     uint32_t vgs_count = dg->get_vgs_count();
-    uint32_t num_vertices = dg->page_graph_info.vertex_count;
+    uint32_t num_vertices = dg->get_vertex_count();
     uint64_t num_tasks = num_vertices * vgs_count;
 
     uint64_t task = 0;
@@ -117,7 +117,7 @@ namespace Peregrine
   inline uint64_t count_loop(DataGraph *dg, std::vector<std::vector<uint32_t>> &cands)
   {
     uint32_t vgs_count = dg->get_vgs_count();
-    uint32_t num_vertices = dg->page_graph_info.vertex_count;
+    uint32_t num_vertices = dg->get_vertex_count();
     uint64_t num_tasks = num_vertices * vgs_count;
 
     uint64_t lcount = 0;
@@ -477,17 +477,17 @@ namespace Peregrine
   (PF &&process, VF &&viewer, size_t nworkers, DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns)
   {
     std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>> results;
+
     if (patterns.empty()) return results;
 
     // initialize
-
     Barrier barrier(nworkers);
     std::vector<std::thread> pool;
     DataGraph dg(std::move(data_graph));
     dg.set_rbi(patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.page_graph_info.vertex_count
-              << " |E| = " << dg.page_graph_info.edge_count
+    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+              << " |E| = " << dg.get_edge_count()
               << std::endl;
 
     dg.set_known_labels(patterns);
@@ -628,8 +628,8 @@ namespace Peregrine
     DataGraph dg(std::move(data_graph));
     dg.set_rbi(patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.page_graph_info.vertex_count
-              << " |E| = " << dg.page_graph_info.edge_count
+    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+              << " |E| = " << dg.get_edge_count()
               << std::endl;
 
     dg.set_known_labels(patterns);
@@ -759,14 +759,13 @@ namespace Peregrine
     if (patterns.empty()) return results;
 
     // initialize
-
     Barrier barrier(nworkers);
     std::vector<std::thread> pool;
     DataGraph dg(std::move(data_graph));
     dg.set_rbi(patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.page_graph_info.vertex_count
-              << " |E| = " << dg.page_graph_info.edge_count
+    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+              << " |E| = " << dg.get_edge_count()
               << std::endl;
 
     dg.set_known_labels(patterns);
@@ -966,8 +965,8 @@ namespace Peregrine
     DataGraph dg(data_graph);
     dg.set_rbi(new_patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.page_graph_info.vertex_count
-              << " |E| = " << dg.page_graph_info.edge_count
+    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+              << " |E| = " << dg.get_edge_count()
               << std::endl;
 
     dg.set_known_labels(new_patterns);
@@ -1036,7 +1035,7 @@ namespace Peregrine
     DataGraph dg(data_graph);
     dg.set_rbi(p);
 
-    uint32_t num_vertices = dg.page_graph_info.vertex_count;
+    uint32_t num_vertices = dg.get_vertex_count();
     uint32_t vgs_count = dg.get_vgs_count();
 
     uint64_t count = 0;

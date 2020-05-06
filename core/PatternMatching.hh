@@ -160,7 +160,7 @@ namespace Peregrine
   template <Graph::Labelling L>
   struct partial_match
   {
-    partial_match(size_t n) : mapping(n, 0), labels(n, static_cast<uint32_t>(-1)) {}
+    partial_match(size_t n) : mapping(n, static_cast<uint32_t>(-1)), labels(n, static_cast<uint32_t>(-1)) {}
 
     uint32_t at(uint32_t u) const {
       return mapping[u - 1];
@@ -219,7 +219,7 @@ namespace Peregrine
   template <>
   struct partial_match<Graph::LABELLED>
   {
-    partial_match(size_t n) : mapping(n, 0) {}
+    partial_match(size_t n) : mapping(n, static_cast<uint32_t>(-1)) {}
     partial_match(const partial_match &other) : mapping(other.mapping) {}
     partial_match(const partial_match &other, uint32_t qv, uint32_t dv) : mapping(other.mapping) {
       mapping[qv - 1] = dv;
@@ -277,7 +277,7 @@ namespace Peregrine
   template <>
   struct partial_match<Graph::UNLABELLED>
   {
-    partial_match(size_t n) : mapping(n, 0) {}
+    partial_match(size_t n) : mapping(n, static_cast<uint32_t>(-1)) {}
     partial_match(const partial_match &other) : mapping(other.mapping) {}
     partial_match(const partial_match &other, uint32_t qv, uint32_t dv) : mapping(other.mapping) {
       mapping[qv - 1] = dv;
@@ -2068,7 +2068,7 @@ namespace Peregrine
     DataGraph dg(data_graph);
     dg.set_rbi(p);
 
-    uint32_t num_vertices = dg.page_graph_info.vertex_count;
+    uint32_t num_vertices = dg.get_vertex_count();
     uint32_t vgs_count = dg.get_vgs_count();
 
     uint64_t count = 0;

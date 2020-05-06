@@ -7,11 +7,6 @@
 
 namespace Peregrine
 {
-
-  // XXX can I calculate the range of labels and minimize vector size?
-  // this would also avoid hardcoding/requiring config
-  static uint32_t VEC_AGG_SZ = 2000;
-  
   template <typename AggValueT>
   struct VecAggItem
   {
@@ -29,15 +24,19 @@ namespace Peregrine
     using AggHandle = VecAggHandle<AggValueT, onthefly, stoppable, ViewFunc>;
   
     VecAggregator(uint32_t nworkers, ViewFunc &vf)
-      : values(nworkers),
+      : VEC_AGG_OFFSET(Context::data_graph->get_label_range().first),
+        VEC_AGG_SIZE(Context::data_graph->get_label_range().second - VEC_AGG_OFFSET),
+        values(nworkers),
         handles(nworkers),
         flag({false, false}),
         viewer(vf),
-        latest_result(VEC_AGG_SZ)
+        latest_result(VEC_AGG_SIZE)
     {}
   
     VecAggregator(VecAggregator &) = delete;
   
+    const uint32_t VEC_AGG_OFFSET;
+    const uint32_t VEC_AGG_SIZE;
     std::vector<AggValueT> global;
     std::vector<std::atomic<VecAggItem<AggValueT>>> values;
     std::vector<AggHandle *> handles;
@@ -100,7 +99,7 @@ namespace Peregrine
     void reset()
     {
       global.clear();
-      global.resize(VEC_AGG_SZ);
+      global.resize(VEC_AGG_SIZE);
       for (auto &item : latest_result)
       {
         item.store(ViewType());
@@ -123,6 +122,9 @@ namespace Peregrine
   {
     using ViewType = decltype(std::declval<ViewFunc>()(std::declval<AggValueT>()));
     using Aggregator = VecAggregator<AggValueT, onthefly, stoppable, ViewFunc>;
+
+    const uint32_t VEC_AGG_OFFSET;
+    const uint32_t VEC_AGG_SIZE;
   
     std::vector<AggValueT> curr;
     std::vector<AggValueT> other;
@@ -131,10 +133,12 @@ namespace Peregrine
     Aggregator *agg;
     uint32_t new_label_idx;
     Barrier &barrier;
-  
+
     VecAggHandle(uint32_t tid, Aggregator *a, Barrier &b)
-      : curr(VEC_AGG_SZ),
-        other(VEC_AGG_SZ),
+      : VEC_AGG_OFFSET(Context::data_graph->get_label_range().first),
+        VEC_AGG_SIZE(Context::data_graph->get_label_range().second - VEC_AGG_OFFSET),
+        curr(VEC_AGG_SIZE),
+        other(VEC_AGG_SIZE),
         id(tid),
         agg(a),
         new_label_idx(Context::data_graph->new_label),
@@ -147,23 +151,23 @@ namespace Peregrine
     // we use the vector, saving the unnecessary construction.
     void map(const std::vector<uint32_t> &k, const auto &v)
     {
-      curr[k[new_label_idx]] += v;
+      curr[k[new_label_idx] - VEC_AGG_OFFSET] += v;
     }
   
     void reset()
     {
       curr.clear();
-      curr.resize(VEC_AGG_SZ);
+      curr.resize(VEC_AGG_SIZE);
   
       other.clear();
-      other.resize(VEC_AGG_SZ);
+      other.resize(VEC_AGG_SIZE);
 
       new_label_idx = Context::data_graph->new_label;
     }
   
     ViewType read_value(const std::vector<uint32_t> &k)
     {
-      return agg->latest_result[k[new_label_idx]].load();
+      return agg->latest_result[k[new_label_idx] - VEC_AGG_OFFSET].load();
     }
   
     void stop()
@@ -179,7 +183,7 @@ namespace Peregrine
         // swap curr and other
         std::swap(curr, other);
         curr.clear();
-        curr.resize(VEC_AGG_SZ);
+        curr.resize(VEC_AGG_SIZE);
   
         // set freshness
         agg->set_fresh(id);

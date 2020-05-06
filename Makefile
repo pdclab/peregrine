@@ -26,10 +26,8 @@ count: apps/count.cc $(OBJ) bliss
 test: core/test.cc $(OBJ) $(TESTS) bliss
 	$(CC) core/test.cc $(OBJ) -o $(OUTDIR)/$@ $(LDFLAGS) -lUnitTest++ $(CFLAGS)
 
-convert_to_binary: core/convert_data.cc core/convert_to_binary.sh bliss
-	$(CC) -o $(OUTDIR)/convert_data core/convert_data.cc $(CFLAGS) $(LDFLAGS)
-	cp core/convert_to_binary.sh bin
-	chmod +x bin/convert_to_binary.sh
+convert_data: core/convert_data.cc core/utils.o
+	$(CC) -o $(OUTDIR)/$@ $? -lpthread -ltbb -latomic $(CFLAGS)
 
 bliss:
 	make -C ./core/bliss-0.73

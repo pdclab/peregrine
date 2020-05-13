@@ -124,7 +124,7 @@ Given a file in the following edge-list format:
 
 where the `label`'s are optional 32-bit integers. To indicate a vertex is
 unlabelled in a partially-labelled pattern, assign it label `-1`. To indicate
-an anti-edge, any extra non-whitespace character can be placed at the end of
+an anti-edge, any extra integer can be placed at the end of
 the line.
 
 For example, a triangle:
@@ -140,7 +140,7 @@ A vertex-induced 3-star, notice the last edge is an anti-edge:
 ```
 1 2
 1 3
-2 3 -
+2 3 1
 ```
 
 A partially-labelled triangle (vertex 3 is unlabelled):

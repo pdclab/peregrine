@@ -154,7 +154,7 @@ void matchPattern(DataGraph &dg,
   bool has_anti_edges = dg.rbi.has_anti_edges();
   bool has_anti_vertices = !dg.rbi.anti_vertices.empty();
 
-  uint32_t num_vertices = dg.page_graph_info.vertex_count;
+  uint32_t num_vertices = dg.get_vertex_count();
   uint32_t vgs_count = dg.get_vgs_count();
 
   if (has_anti_edges)
@@ -220,7 +220,7 @@ uint64_t countPattern(DataGraph &dg,
   dg.set_rbi(p);
   bool has_anti_vertices = !dg.rbi.anti_vertices.empty();
 
-  uint32_t num_vertices = dg.page_graph_info.vertex_count;
+  uint32_t num_vertices = dg.get_vertex_count();
   uint32_t vgs_count = dg.get_vgs_count();
 
   uint64_t c = 0;
@@ -597,7 +597,7 @@ SUITE(PatternMatcherTests)
   TEST(AntiEdges)
   {
     // mico is too slow single-threaded
-    DataGraph data_graph("../citeseer");
+    DataGraph data_graph("data/citeseer");
     SmallGraph p(s4);
 
     // filter
@@ -742,7 +742,7 @@ SUITE(PatternMatcherTests)
 
   TEST(Unlabelled3MotifsNoAnti)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(3,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::EXCLUDE_ANTI_EDGES);
@@ -754,7 +754,7 @@ SUITE(PatternMatcherTests)
 
   TEST(Unlabelled4MotifsNoAnti)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(4,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::EXCLUDE_ANTI_EDGES);
@@ -765,7 +765,7 @@ SUITE(PatternMatcherTests)
 
   TEST(Unlabelled3Motifs)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(3,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::INCLUDE_ANTI_EDGES);
@@ -777,7 +777,7 @@ SUITE(PatternMatcherTests)
 
   TEST(Unlabelled4Motifs)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(4,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::INCLUDE_ANTI_EDGES);
@@ -788,7 +788,7 @@ SUITE(PatternMatcherTests)
 
   TEST(ToughPatterns)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
 
     std::vector<SmallGraph> patterns = {p6, labelling1, labelling2};
 
@@ -958,7 +958,7 @@ SUITE(PatternCounterTests)
 
   TEST(Unlabelled3MotifsNoAnti)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(3,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::EXCLUDE_ANTI_EDGES);
@@ -970,7 +970,7 @@ SUITE(PatternCounterTests)
 
   TEST(Unlabelled4MotifsNoAnti)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(4,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::EXCLUDE_ANTI_EDGES);
@@ -982,7 +982,7 @@ SUITE(PatternCounterTests)
 
   TEST(Unlabelled3Motifs)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(3,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::INCLUDE_ANTI_EDGES);
@@ -994,7 +994,7 @@ SUITE(PatternCounterTests)
 
   TEST(Unlabelled4Motifs)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     std::vector<SmallGraph> patterns = PatternGenerator::all(4,
         PatternGenerator::VERTEX_BASED,
         PatternGenerator::INCLUDE_ANTI_EDGES);
@@ -1006,7 +1006,7 @@ SUITE(PatternCounterTests)
 
   TEST(ToughPatterns)
   {
-    std::string data_graph= "../citeseer";
+    std::string data_graph= "data/citeseer";
     DataGraph dg2(p6);
     std::vector<SmallGraph> patterns = {p6, labelling1, labelling2};
 

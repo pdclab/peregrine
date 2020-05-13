@@ -25,7 +25,7 @@ namespace Peregrine
   
     VecAggregator(uint32_t nworkers, ViewFunc &vf)
       : VEC_AGG_OFFSET(Context::data_graph->get_label_range().first),
-        VEC_AGG_SIZE(Context::data_graph->get_label_range().second - VEC_AGG_OFFSET),
+        VEC_AGG_SIZE(Context::data_graph->get_label_range().second - VEC_AGG_OFFSET + 1),
         values(nworkers),
         handles(nworkers),
         flag({false, false}),
@@ -136,7 +136,7 @@ namespace Peregrine
 
     VecAggHandle(uint32_t tid, Aggregator *a, Barrier &b)
       : VEC_AGG_OFFSET(Context::data_graph->get_label_range().first),
-        VEC_AGG_SIZE(Context::data_graph->get_label_range().second - VEC_AGG_OFFSET),
+        VEC_AGG_SIZE(Context::data_graph->get_label_range().second - VEC_AGG_OFFSET + 1),
         curr(VEC_AGG_SIZE),
         other(VEC_AGG_SIZE),
         id(tid),

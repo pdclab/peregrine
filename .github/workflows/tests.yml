@@ -1,0 +1,29 @@
+name: tests
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: add repo for g++ 9
+      run: sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+    - name: update repos
+      run: sudo apt update
+    - name: install g++ 9
+      run: sudo apt install gcc-9 g++-9
+    - name: make g++ 9 default
+      run: sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 60 --slave /usr/bin/g++ g++ /usr/bin/g++-9
+    - name: install UnitTest++
+      run: sudo apt install libunittest++-dev
+    - name: make
+      run: source tbb2019/bin/tbbvars.sh intel64 && make -j all test
+    - name: run test
+      run: bin/test

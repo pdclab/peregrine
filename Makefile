@@ -1,5 +1,5 @@
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
-LDFLAGS=-L $(ROOT_DIR)/core/bliss-0.73/ -lbliss -L/usr/local/lib -lpthread -ltbb -latomic
+LDFLAGS=-L $(ROOT_DIR)/core/bliss-0.73/ -lbliss -L/usr/local/lib -lpthread -latomic -L$(LD_LIBRARY_PATH) -ltbb
 CFLAGS=-O3 -std=c++2a -Wall -Wextra -Wpedantic -fPIC -fconcepts -I$(ROOT_DIR)/core/
 OBJ=core/DataGraph.o core/PO.o core/utils.o core/PatternGenerator.o $(ROOT_DIR)/core/showg.o
 TESTS=core/unittests/PatternMatching_test.hh core/unittests/PatternGenerator_test.hh core/unittests/Graph_test.hh
@@ -27,7 +27,7 @@ test: core/test.cc $(OBJ) $(TESTS) bliss
 	$(CC) core/test.cc $(OBJ) -o $(OUTDIR)/$@ $(LDFLAGS) -lUnitTest++ $(CFLAGS)
 
 convert_data: core/convert_data.cc core/utils.o
-	$(CC) -o $(OUTDIR)/$@ $? -lpthread -ltbb -latomic $(CFLAGS)
+	$(CC) -o $(OUTDIR)/$@ $? -L/usr/local/lib -lpthread -latomic -L$(LD_LIBRARY_PATH) -ltbb $(CFLAGS)
 
 bliss:
 	make -C ./core/bliss-0.73

@@ -2,3 +2,4 @@
 *.a
 bliss
 bin/*
+!bin/.gitkeep

@@ -101,14 +101,15 @@ namespace Peregrine
       uint32_t vgsi = task % vgs_count;
       Matcher<has_anti_vertices, Stoppable, decltype(process)> m(dg->rbi, dg, vgsi, cands, process);
       m.template map_into<L, has_anti_edges>(v);
-      if constexpr (OnTheFly == ON_THE_FLY)
-      {
-        a.submit();
-      }
 
       if constexpr (Stoppable == STOPPABLE)
       {
         pthread_testcancel();
+      }
+
+      if constexpr (OnTheFly == ON_THE_FLY)
+      {
+        a.submit();
       }
     }
   }
@@ -451,9 +452,9 @@ namespace Peregrine
           && std::is_integral_v<GivenAggValueT>
           && Stoppable == UNSTOPPABLE && OnTheFly == AT_THE_END)
       {
-        std::cout
+        utils::Log{}
           << "WARN: If you are counting, Peregrine::count() is much faster!"
-          << std::endl;
+          << "\n";
       }
 
       auto result = match_single<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, data_graph, single);
@@ -486,9 +487,9 @@ namespace Peregrine
     DataGraph dg(std::move(data_graph));
     dg.set_rbi(patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
               << " |E| = " << dg.get_edge_count()
-              << std::endl;
+              << "\n";
 
     dg.set_known_labels(patterns);
     Context::data_graph = &dg;
@@ -531,7 +532,7 @@ namespace Peregrine
 
       // set new pattern
       dg.set_rbi(p);
-      std::cout << "matching " << p.to_string() << std::endl;
+      utils::Log{} << "matching " << p.to_string() << "\n";
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
       // prepare handles for the next pattern
       aggregator.reset();
@@ -592,7 +593,7 @@ namespace Peregrine
         results.emplace_back(SmallGraph(p, k), v);
       }
 
-      std::cout << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << std::endl;
+      utils::Log{} << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
     auto t4 = utils::get_timestamp();
 
@@ -607,8 +608,8 @@ namespace Peregrine
       agg_thread.join();
     }
 
-    std::cout << "-------" << std::endl;
-    std::cout << "all patterns finished after " << (t4-t3)/1e6 << "s" << std::endl;
+    utils::Log{} << "-------" << "\n";
+    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
 
     return results;
   }
@@ -628,9 +629,9 @@ namespace Peregrine
     DataGraph dg(std::move(data_graph));
     dg.set_rbi(patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
               << " |E| = " << dg.get_edge_count()
-              << std::endl;
+              << "\n";
 
     dg.set_known_labels(patterns);
     Context::data_graph = &dg;
@@ -671,7 +672,7 @@ namespace Peregrine
 
       // set new pattern
       dg.set_rbi(p);
-      std::cout << "matching " << p.to_string() << std::endl;
+      utils::Log{} << "matching " << p.to_string() << "\n";
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
       // prepare handles for the next pattern
       aggregator.reset();
@@ -728,7 +729,7 @@ namespace Peregrine
         }
       }
 
-      std::cout << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << std::endl;
+      utils::Log{} << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
     auto t4 = utils::get_timestamp();
 
@@ -743,8 +744,8 @@ namespace Peregrine
       agg_thread.join();
     }
 
-    std::cout << "-------" << std::endl;
-    std::cout << "all patterns finished after " << (t4-t3)/1e6 << "s" << std::endl;
+    utils::Log{} << "-------" << "\n";
+    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
 
     return results;
   }
@@ -764,9 +765,9 @@ namespace Peregrine
     DataGraph dg(std::move(data_graph));
     dg.set_rbi(patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
               << " |E| = " << dg.get_edge_count()
-              << std::endl;
+              << "\n";
 
     dg.set_known_labels(patterns);
     Context::data_graph = &dg;
@@ -808,7 +809,7 @@ namespace Peregrine
 
       // set new pattern
       dg.set_rbi(p);
-      std::cout << "matching " << p.to_string() << std::endl;
+      utils::Log{} << "matching " << p.to_string() << "\n";
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
       // prepare handles for the next pattern
       aggregator.reset();
@@ -873,7 +874,7 @@ namespace Peregrine
         l += 1;
       }
 
-      std::cout << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << std::endl;
+      utils::Log{} << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
     auto t4 = utils::get_timestamp();
 
@@ -888,8 +889,8 @@ namespace Peregrine
       agg_thread.join();
     }
 
-    std::cout << "-------" << std::endl;
-    std::cout << "all patterns finished after " << (t4-t3)/1e6 << "s" << std::endl;
+    utils::Log{} << "-------" << "\n";
+    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
 
     return results;
   }
@@ -904,7 +905,7 @@ namespace Peregrine
       for (uint32_t j = i+1; j < edge_based.size(); ++j) {
         uint32_t n = num_mappings(edge_based[j].first, edge_based[i].first);
         uint64_t inc = n * vbased[j].second;
-        //std::cout << "mapping " << edge_based[i].first.to_string() << " into " << edge_based[j].first.to_string() << ": " << n << std::endl;
+        //utils::Log{} << "mapping " << edge_based[i].first.to_string() << " into " << edge_based[j].first.to_string() << ": " << n << "\n";
         count -= inc;
       }
       vbased[i] = {original_patterns[i], count};
@@ -965,9 +966,9 @@ namespace Peregrine
     DataGraph dg(data_graph);
     dg.set_rbi(new_patterns.front());
 
-    std::cout << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
+    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
               << " |E| = " << dg.get_edge_count()
-              << std::endl;
+              << "\n";
 
     dg.set_known_labels(new_patterns);
 
@@ -1003,10 +1004,10 @@ namespace Peregrine
 
       // get counts
       uint64_t global_count = Context::gcount;
-      //std::cout << p.to_string() << " " << global_count << std::endl;
+      //utils::Log{} << p.to_string() << " " << global_count << "\n";
       results.emplace_back(p, global_count);
 
-      std::cout << patterns[i++].to_string() << " finished after " << (t2-t1)/1e6 << "s" << std::endl;
+      utils::Log{} << patterns[i++].to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
     auto t4 = utils::get_timestamp();
 
@@ -1021,8 +1022,8 @@ namespace Peregrine
       results = convert_counts(results, patterns);
     }
 
-    std::cout << "-------" << std::endl;
-    std::cout << "all patterns finished after " << (t4-t3)/1e6 << "s" << std::endl;
+    utils::Log{} << "-------" << "\n";
+    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
 
 
     return results;

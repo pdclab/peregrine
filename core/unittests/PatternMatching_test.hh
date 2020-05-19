@@ -88,18 +88,6 @@ static const SmallGraph labelling2 = SmallGraph(base)
       .set_label(4, 1)
       .set_label(5, 1);
 
-// edge-induced counts on mico
-//std::unordered_map<SmallGraph, uint64_t> unlabelled_ground_truth_edge({
-//  std::make_pair(s3, 91151339),     // [1-3][2-3]                     3-star
-//  std::make_pair(cl3, 12534960),    // [1-2][2-3][1-3]                triangle
-//  std::make_pair(c4, 20196755383),  // [1-2][1-4][2-3]                4-chain
-//  std::make_pair(s4, 8835219382),   // [1-2][1-3][1-4]                4-star
-//  std::make_pair(twe, 11522255409), // [1-2][1-3][1-4][2-3]           twe
-//  std::make_pair(cy4, 2016507139),  // [1-2][1-4][2-3][3-4]           4-cycle
-//  std::make_pair(swd, 3527170461),  // [1-2][1-3][1-4][2-3][3-4]      4-chordal-cycle
-//  std::make_pair(cl4, 514864225),   // [1-2][1-3][1-4][2-3][2-4][3-4] 4-clique
-//});
-
 // edge-induced counts on citeseer
 std::unordered_map<SmallGraph, uint64_t> unlabelled_ground_truth_edge({
   std::make_pair(s3, 26878),  // [1-3][2-3]                     3-star
@@ -116,18 +104,6 @@ std::unordered_map<SmallGraph, uint64_t> unlabelled_ground_truth_edge({
   std::make_pair(labelling2, 1123126),
 });
 
-
-// vertex-induced counts on mico
-//std::unordered_map<SmallGraph, uint64_t> unlabelled_ground_truth_vtx({
-//   std::make_pair(s3, 53546459),    // [1-3][2-3]                     3-star
-//   std::make_pair(cl3, 12534960),   // [1-2][2-3][1-3]                triangle
-//   std::make_pair(c4, 4070868075),  // [1-2][1-4][2-3]                4-chain
-//   std::make_pair(s4, 2307847995),  // [1-2][1-3][1-4]                4-star
-//   std::make_pair(twe, 3591944265), // [1-2][1-3][1-4][2-3]           twe
-//   std::make_pair(cy4, 33929353),   // [1-2][1-4][2-3][3-4]           4-cycle
-//   std::make_pair(swd, 437985111),  // [1-2][1-3][1-4][2-3][3-4]      4-chordal-cycle
-//   std::make_pair(cl4, 514864225),  // [1-2][1-3][1-4][2-3][2-4][3-4] 4-clique
-//});
 
 // vertex-induced counts on citeseer
 std::unordered_map<SmallGraph, uint64_t> unlabelled_ground_truth_vtx({

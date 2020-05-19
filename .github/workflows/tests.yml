@@ -26,4 +26,4 @@ jobs:
     - name: make
       run: source tbb2019/bin/tbbvars.sh intel64 && make -j all test
     - name: run test
-      run: bin/test
+      run: source tbb2019/bin/tbbvars.sh intel64 && bin/test

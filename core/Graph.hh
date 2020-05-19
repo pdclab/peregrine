@@ -126,10 +126,8 @@ namespace Peregrine
         return labelling;
       }
 
-      /**
-       * Only works for undirected patterns with only true edges/vertices
-       */
-      uint64_t bliss_hash() const {
+      auto *bliss_graph() const
+      {
         bliss::Graph bliss_qg;
         if (labelling == Graph::LABELLED || labelling == Graph::PARTIALLY_LABELLED)
         {
@@ -158,8 +156,15 @@ namespace Peregrine
         }
 
         bliss::Stats s;
-        auto *new_graph = bliss_qg.permute(bliss_qg.canonical_form(s, NULL, NULL));
+        return bliss_qg.permute(bliss_qg.canonical_form(s, NULL, NULL));
+      }
 
+      /**
+       * Only works for undirected patterns with only true edges/vertices.
+       */
+      uint64_t bliss_hash() const
+      {
+        auto *new_graph = bliss_graph();
         return new_graph->get_hash();
       }
 
@@ -404,7 +409,7 @@ namespace Peregrine
 
         if (labelling == Graph::PARTIALLY_LABELLED || labelling == Graph::LABELLED)
         {
-          // may have added a anti-vertex: in which case we need to give it a label
+          // may have added a vertex: in which case we need to give it a label
           if (v > num_vertices())
           {
             labels.push_back(static_cast<uint32_t>(-3)); // just some random label
@@ -416,10 +421,8 @@ namespace Peregrine
 
       SmallGraph &set_label(uint32_t u, uint32_t l)
       {
-        if (labelling == Graph::UNLABELLED || labelling == Graph::DISCOVER_LABELS)
-        {
-          labels.resize(num_vertices() + num_anti_vertices());
-        }
+        // resize always: don't assume all edges have already been added
+        labels.resize(std::max({u, num_vertices() + num_anti_vertices(), static_cast<uint32_t>(labels.size())}));
 
         labels[u-1] = l;
         labelling = l == static_cast<uint32_t>(-1) ? Graph::PARTIALLY_LABELLED : Graph::LABELLED;
@@ -446,13 +449,16 @@ namespace Peregrine
         return *this;
       }
 
-      // checks labels: it is assumed that the two patterns have the same structure
-      bool operator==(const SmallGraph &p) const {
-        return p.labels == labels;
-      }
-
-      bool operator<(const SmallGraph &p) const {
-        return p.labels < labels;
+      /**
+       * This is very expensive! It exists only for testing/debug purposes
+       */
+      bool operator==(const SmallGraph &other) const
+      {
+        // XXX: is there a better way to warn? Maybe suggest what to do instead
+        utils::Log{}
+          << "WARNING: comparing SmallGraphs for equality is expensive and should be avoided"
+          << "\n";
+        return bliss_graph()->cmp(*other.bliss_graph()) == 0;
       }
   };
 
@@ -1467,13 +1473,14 @@ namespace Peregrine
 
       void build_qo_order()
       {
-          qo_book.resize(vgs.size());
-          auto vgs_id = 0;
-          for(const SmallGraph &vgs : this->vgs) {
-              std::vector<bool> visited(vgs.num_vertices()+1, false);
-              get_qo(vgs, global_order[vgs.num_vertices()-1], vgs_id, visited);
-              vgs_id++;
-          }
+        qo_book.resize(vgs.size());
+        auto vgs_id = 0;
+        for(const SmallGraph &vgs : this->vgs)
+        {
+          std::vector<bool> visited(vgs.num_vertices()+1, false);
+          get_qo(vgs, global_order[vgs.num_vertices()-1], vgs_id, visited);
+          vgs_id++;
+        }
       }
   };
 
@@ -1489,6 +1496,15 @@ namespace std
     std::size_t operator()(const Peregrine::SmallGraph &k) const
     {
       return k.bliss_hash();
+    }
+  };
+
+  template <>
+  struct equal_to<Peregrine::SmallGraph>
+  {
+    bool operator()(const Peregrine::SmallGraph &lhs, const Peregrine::SmallGraph &rhs) const
+    {
+      return lhs.bliss_graph()->cmp(*rhs.bliss_graph()) == 0;
     }
   };
 }

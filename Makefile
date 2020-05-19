@@ -2,7 +2,6 @@ ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 LDFLAGS=-L $(ROOT_DIR)/core/bliss-0.73/ -lbliss -L/usr/local/lib -lpthread -latomic -L$(LD_LIBRARY_PATH) -ltbb
 CFLAGS=-O3 -std=c++2a -Wall -Wextra -Wpedantic -fPIC -fconcepts -I$(ROOT_DIR)/core/
 OBJ=core/DataGraph.o core/PO.o core/utils.o core/PatternGenerator.o $(ROOT_DIR)/core/showg.o
-TESTS=core/unittests/PatternMatching_test.hh core/unittests/PatternGenerator_test.hh core/unittests/Graph_test.hh
 OUTDIR=bin/
 CC=g++
 
@@ -23,10 +22,10 @@ existence-query: apps/existence-query.cc $(OBJ) bliss
 count: apps/count.cc $(OBJ) bliss
 	$(CC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(LDFLAGS) $(CFLAGS)
 
-test: core/test.cc $(OBJ) $(TESTS) bliss
-	$(CC) core/test.cc $(OBJ) -o $(OUTDIR)/$@ $(LDFLAGS) -lUnitTest++ $(CFLAGS)
+test: core/test.cc $(OBJ) core/DataConverter.o core/roaring.o bliss
+	$(CC) core/test.cc -DTESTING $(OBJ) core/DataConverter.o core/roaring.o -o $(OUTDIR)/$@ $(LDFLAGS) -lUnitTest++ $(CFLAGS)
 
-convert_data: core/convert_data.cc core/utils.o
+convert_data: core/convert_data.cc core/DataConverter.o core/utils.o
 	$(CC) -o $(OUTDIR)/$@ $? -L/usr/local/lib -lpthread -latomic -L$(LD_LIBRARY_PATH) -ltbb $(CFLAGS)
 
 bliss:

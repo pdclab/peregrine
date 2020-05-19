@@ -18,6 +18,27 @@ extern std::mutex logging_mutex;
 typedef unsigned long long timestamp_t;
 timestamp_t get_timestamp();
 
+struct Log
+{
+  Log() {}
+  ~Log() { std::cout << std::flush; }
+
+#ifdef TESTING
+  template <typename T>
+  const Log &operator<<(const T &) const
+  {
+    return *this;
+  }
+#else
+  template <typename T>
+  const Log &operator<<(const T &t) const
+  {
+    std::cout << t;
+    return *this;
+  }
+#endif
+};
+
 template <typename T>
 void print_alist(const std::unordered_map<T, std::vector<T>> &a_list)
 {

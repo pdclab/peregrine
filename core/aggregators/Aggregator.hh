@@ -117,8 +117,8 @@ namespace Peregrine
       latest_result.clear();
   
       // cmp_exchg isn't really necessary but
-      flag_t expected = ON();
-      flag.compare_exchange_strong(expected, OFF());
+      flag_t expected = OFF();
+      flag.compare_exchange_strong(expected, ON());
     }
   
     void register_handle(uint32_t id, AggHandle &ah)
@@ -188,7 +188,7 @@ namespace Peregrine
       void submit()
       {
         // if other has been read
-        if (agg->stale(id))
+        if (agg && agg->stale(id))
         {
           // swap curr and other
           std::swap(curr, other);

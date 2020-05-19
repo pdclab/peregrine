@@ -122,4 +122,48 @@ SUITE(GraphPatternAnalysis)
     CHECK((r4.order_groups.front() == std::vector<uint32_t>{2, 4, 3}));
     CHECK(r4.sibling_groups.front() == 2);
   }
+
+  TEST(GraphBuilder)
+  {
+    SmallGraph p;
+
+    CHECK_EQUAL(0, p.num_vertices());
+    CHECK_EQUAL(0, p.num_true_edges());
+    CHECK_EQUAL(0, p.num_anti_edges());
+    CHECK_EQUAL(Graph::UNLABELLED, p.get_labelling());
+
+    p.add_edge(1, 4);
+    CHECK_EQUAL(2, p.num_vertices());
+    CHECK_EQUAL(1, p.num_true_edges());
+    CHECK_EQUAL(0, p.num_anti_edges());
+    CHECK_EQUAL(Graph::UNLABELLED, p.get_labelling());
+
+    p.set_label(4, 'a');
+    CHECK_EQUAL(2, p.num_vertices());
+    CHECK_EQUAL(Graph::LABELLED, p.get_labelling());
+    CHECK_EQUAL('a', p.label(4));
+    CHECK_EQUAL(0, p.label(1));
+
+    // Since the vertex 4 exists, we assume there will be vertices 2 and 3 at some point
+    p.set_label(2, 'b');
+    CHECK_EQUAL(2, p.num_vertices());
+    CHECK_EQUAL(1, p.num_true_edges());
+    CHECK_EQUAL(0, p.num_anti_edges());
+    CHECK_EQUAL('a', p.label(4));
+    CHECK_EQUAL('b', p.label(2));
+
+    p.add_edge(2, 1);
+    CHECK_EQUAL(3, p.num_vertices());
+    CHECK_EQUAL(2, p.num_true_edges());
+    CHECK_EQUAL(0, p.num_anti_edges());
+    CHECK_EQUAL('a', p.label(4));
+    CHECK_EQUAL('b', p.label(2));
+    CHECK_EQUAL(0, p.label(1));
+
+    p.set_label(1, static_cast<uint32_t>(-1));
+    CHECK_EQUAL(Graph::PARTIALLY_LABELLED, p.get_labelling());
+    CHECK_EQUAL('a', p.label(4));
+    CHECK_EQUAL('b', p.label(2));
+    CHECK_EQUAL(-1, p.label(1));
+  }
 }

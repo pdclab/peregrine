@@ -2,6 +2,8 @@
 
 # Peregrine: A Pattern-Aware Graph Mining System
 
+![tests](https://github.com/pdclab/peregrine/workflows/tests/badge.svg)
+
 Peregrine is an efficient, single-machine system for performing data mining tasks on large graphs. Some graph mining applications include:
 * Finding frequent subgraphs
 * Generating the motif/graphlet distribution
@@ -109,6 +111,9 @@ of these patterns in your data graph. We present a brief overview of the API
 here, beginning with constructing patterns.
 
 For all of the following code snippets, assume we are `using namespace Peregrine`.
+
+We have not released support for directed graphs yet; the code currently
+assumes all graphs are undirected.
 
 ### 2.1 Constructing patterns directly
 

@@ -348,13 +348,16 @@ namespace Peregrine
       utils::Log{} << "Wrote data to disk in " << (t12-t11)/1e6 << "s" << "\n";
     
       auto t13 = utils::get_timestamp();
+
       // clean up in memory graph
-      for (uint32_t i = 0; i < num_vertices; ++i)
-      {
-        delete[] graph[i].ptr;
-      }
+      std::for_each(std::execution::unseq, ids_map.cbegin(), ids_map.cend(),
+          [&graph, &ids_rev_map](const uint32_t true_v)
+          {
+            uint32_t new_v = ids_rev_map.at(true_v);
+            delete[] graph[new_v].ptr;
+          });
       delete[] graph;
-    
+
       // concatenate thread local files
       {
         std::string output_path(out_dir + "/data.bin");

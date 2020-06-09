@@ -8,7 +8,7 @@
 
 int main(int argc, char *argv[])
 {
-  if (argc < 3)
+  if (argc < 4)
   {
     std::cerr << "USAGE: " << argv[0] << " <data graph> <max size> <support threshold> [# threads]" << std::endl;
     return -1;

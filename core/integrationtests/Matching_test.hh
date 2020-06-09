@@ -41,7 +41,7 @@ TEST(MatchingIntegration)
 
   std::cout << "RUNNING MATCHING INTEGRATION TEST" << std::endl;
 
-  std::unordered_map<Peregrine::SmallGraph, uint64_t> truth;
+  std::vector<std::unordered_map<Peregrine::SmallGraph, uint64_t>> truth(k-1);
   {
     std::ifstream truth_file("core/integrationtests/cs-supports.txt");
     CHECK(truth_file.is_open());
@@ -52,7 +52,8 @@ TEST(MatchingIntegration)
     uint64_t supp;
     while (truth_file >> id >> supp)
     {
-      truth[from_string(id)] = supp;
+      Peregrine::SmallGraph p = from_string(id);
+      truth[p.num_true_edges()-2][p] = supp;
     }
   }
 
@@ -80,9 +81,11 @@ TEST(MatchingIntegration)
       {
         freq_patterns.push_back(p);
         supports.push_back(supp);
-        REQUIRE CHECK_EQUAL(supp, truth.at(p));
+        REQUIRE CHECK_EQUAL(supp, truth[0].at(p));
       }
     }
+    REQUIRE CHECK_EQUAL(truth[0].size(), freq_patterns.size());
+
     auto tt2 = utils::get_timestamp();
     std::cout << "Step 1\t✓ " << (tt2-tt1)/1e6 << "s" << std::endl;
   }
@@ -108,13 +111,16 @@ TEST(MatchingIntegration)
       {
         freq_patterns.push_back(p);
         supports.push_back(supp);
-        REQUIRE CHECK_EQUAL(supp, truth.at(p));
+        REQUIRE CHECK_EQUAL(supp, truth[step-1].at(p));
       }
     }
+    REQUIRE CHECK_EQUAL(truth[step-1].size(), freq_patterns.size());
+
     auto tt2 = utils::get_timestamp();
     std::cout << "Step " << step << "\t✓ " << (tt2-tt1)/1e6 << "s" << std::endl;
 
     patterns = Peregrine::PatternGenerator::extend(freq_patterns, Peregrine::PatternGenerator::EDGE_BASED);
+
     step += 1;
   }
   auto t2 = utils::get_timestamp();

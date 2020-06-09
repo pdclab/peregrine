@@ -174,20 +174,44 @@ namespace Peregrine
         {
           assert(given_labels.size() >= num_vertices() + num_anti_vertices());
           std::string res("");
-          for (const auto &[u, nbrs] : true_adj_list)
+
+          std::vector<uint32_t> vertices(num_vertices());
+          std::iota(vertices.begin(), vertices.end(), 1);
+          std::sort(vertices.begin(), vertices.end(), [this](uint32_t u, uint32_t v)
+              {
+                return true_adj_list.at(u).size() > true_adj_list.at(v).size();
+              });
+
+          std::vector<uint32_t> indices(num_vertices());
+          for (uint32_t i = 0; i < vertices.size(); ++i)
           {
+            indices[vertices[i]] = i;
+          }
+
+          for (uint32_t i = 0; i < num_vertices(); ++i)
+          {
+            uint32_t u = vertices[i];
+            const auto &nbrs = true_adj_list.at(u);
+            std::vector<uint32_t> nbris;
+            for (auto v : nbrs)
+            {
+              nbris.push_back(indices[v]);
+            }
+            std::sort(nbris.begin(), nbris.end());
+
             auto l1 = given_labels[u-1] == static_cast<uint32_t>(-1)
               ? "*" : std::to_string(given_labels[u-1]);
-            for (uint32_t v : nbrs)
+            for (uint32_t j : nbris)
             {
-              if (u > v) continue;
+              if (i > j) continue;
+              uint32_t v = vertices[j];
               auto l2 = given_labels[v-1] == static_cast<uint32_t>(-1)
                 ? "*" : std::to_string(given_labels[v-1]);
 
               res += "[";
-              res += std::to_string(u) + "," + l1;
+              res += std::to_string(i+1) + "," + l1;
               res += "-";
-              res += std::to_string(v) + "," + l2;
+              res += std::to_string(j+1) + "," + l2;
               res += "]";
             }
           }

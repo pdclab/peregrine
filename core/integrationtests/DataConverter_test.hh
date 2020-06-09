@@ -64,14 +64,14 @@ TEST(DataConverterIntegration)
     // test some matching to make sure edges and labels were written ok
     for (uint32_t k = 3; k <= dg_size; ++k)
     {
-      auto &&kclique = Peregrine::PatternGenerator::clique(k);
+      Peregrine::SmallGraph kclique = Peregrine::PatternGenerator::clique(k);
       for (uint32_t i = 1; i <= k; ++i)
       {
         kclique.set_label(i, 0);
       }
 
       std::cout << k << "-clique" << std::flush;
-      auto &&res = Peregrine::count(dir, {kclique}, nthreads);
+      std::vector<std::pair<Peregrine::SmallGraph, uint64_t>> res = Peregrine::count(dir, {kclique}, nthreads);
       for (const auto &[_, count] : res)
       {
         CHECK_EQUAL(Peregrine::binom(dg_size, k), count);

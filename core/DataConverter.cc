@@ -379,7 +379,7 @@ namespace Peregrine
             std::ofstream output(output_path.c_str(), std::ios::binary | std::ios::app);
             output << input.rdbuf();
           }
-          //std::remove(thread_local_path.c_str());
+          std::remove(thread_local_path.c_str());
         }
       }
       auto t14 = utils::get_timestamp();

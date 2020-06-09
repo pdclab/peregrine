@@ -1,3 +1,4 @@
+#include <thread>
 #include <UnitTest++/UnitTest++.h>
 
 #include "unittests/Graph_test.hh"

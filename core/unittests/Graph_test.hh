@@ -166,4 +166,49 @@ SUITE(GraphPatternAnalysis)
     CHECK_EQUAL('b', p.label(2));
     CHECK_EQUAL(-1, p.label(1));
   }
+
+  TEST(Automorphisms)
+  {
+    SmallGraph p;
+    p.add_edge(1, 2)
+     .add_edge(1, 4)
+     .add_edge(2, 3)
+     .add_edge(3, 4)
+     .set_label(1, 0)
+     .set_label(2, 0)
+     .set_label(3, 4)
+     .set_label(4, 4);
+
+    SmallGraph pr; // rotated clockwise
+    pr.add_edge(1, 2)
+      .add_edge(1, 4)
+      .add_edge(2, 3)
+      .add_edge(3, 4)
+      .set_label(1, 4)
+      .set_label(2, 0)
+      .set_label(3, 0)
+      .set_label(4, 4);
+
+    SmallGraph prr; // rotated clockwise twice
+    prr.add_edge(1, 2)
+      .add_edge(1, 4)
+      .add_edge(2, 3)
+      .add_edge(3, 4)
+      .set_label(1, 4)
+      .set_label(2, 4)
+      .set_label(3, 0)
+      .set_label(4, 0);
+
+    CHECK_EQUAL(p, pr);
+    CHECK_EQUAL(p, prr);
+    CHECK_EQUAL(p.bliss_hash(), pr.bliss_hash());
+    CHECK_EQUAL(p.bliss_hash(), prr.bliss_hash());
+
+    AnalyzedPattern ap(p);
+    AnalyzedPattern apr(pr);
+    AnalyzedPattern aprr(prr);
+
+    CHECK_EQUAL(ap.conditions.size(), apr.conditions.size());
+    CHECK_EQUAL(ap.conditions.size(), aprr.conditions.size());
+  }
 }

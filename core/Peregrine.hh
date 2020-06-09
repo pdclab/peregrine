@@ -524,7 +524,7 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    auto t3 = utils::get_timestamp();
+    auto t1 = utils::get_timestamp();
     for (const auto &p : patterns)
     {
       // reset state
@@ -532,18 +532,15 @@ namespace Peregrine
 
       // set new pattern
       dg.set_rbi(p);
-      utils::Log{} << "matching " << p.to_string() << "\n";
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
       // prepare handles for the next pattern
       aggregator.reset();
 
-      auto t1 = utils::get_timestamp();
       // begin matching
       barrier.release();
 
       // sleep until matching finished
       bool called_stop = barrier.join();
-      auto t2 = utils::get_timestamp();
 
       aggregator.get_result();
 
@@ -592,10 +589,8 @@ namespace Peregrine
       {
         results.emplace_back(SmallGraph(p, k), v);
       }
-
-      utils::Log{} << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
-    auto t4 = utils::get_timestamp();
+    auto t2 = utils::get_timestamp();
 
     barrier.finish();
     for (auto &th : pool)
@@ -609,7 +604,7 @@ namespace Peregrine
     }
 
     utils::Log{} << "-------" << "\n";
-    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
+    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
     return results;
   }
@@ -664,7 +659,7 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    auto t3 = utils::get_timestamp();
+    auto t1 = utils::get_timestamp();
     for (const auto &p : patterns)
     {
       // reset state
@@ -672,18 +667,15 @@ namespace Peregrine
 
       // set new pattern
       dg.set_rbi(p);
-      utils::Log{} << "matching " << p.to_string() << "\n";
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
       // prepare handles for the next pattern
       aggregator.reset();
 
-      auto t1 = utils::get_timestamp();
       // begin matching
       barrier.release();
 
       // sleep until matching finished
       bool called_stop = barrier.join();
-      auto t2 = utils::get_timestamp();
 
       // need to get thread-local values before killing threads
       aggregator.get_result();
@@ -728,10 +720,8 @@ namespace Peregrine
           barrier.join();
         }
       }
-
-      utils::Log{} << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
-    auto t4 = utils::get_timestamp();
+    auto t2 = utils::get_timestamp();
 
     barrier.finish();
     for (auto &th : pool)
@@ -745,7 +735,7 @@ namespace Peregrine
     }
 
     utils::Log{} << "-------" << "\n";
-    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
+    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
     return results;
   }
@@ -801,7 +791,7 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    auto t3 = utils::get_timestamp();
+    auto t1 = utils::get_timestamp();
     for (const auto &p : patterns)
     {
       // reset state
@@ -809,18 +799,15 @@ namespace Peregrine
 
       // set new pattern
       dg.set_rbi(p);
-      utils::Log{} << "matching " << p.to_string() << "\n";
       Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
       // prepare handles for the next pattern
       aggregator.reset();
 
-      auto t1 = utils::get_timestamp();
       // begin matching
       barrier.release();
 
       // sleep until matching finished
       bool called_stop = barrier.join();
-      auto t2 = utils::get_timestamp();
 
       aggregator.get_result();
 
@@ -874,9 +861,8 @@ namespace Peregrine
         l += 1;
       }
 
-      utils::Log{} << p.to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
-    auto t4 = utils::get_timestamp();
+    auto t2 = utils::get_timestamp();
 
     barrier.finish();
     for (auto &th : pool)
@@ -890,7 +876,7 @@ namespace Peregrine
     }
 
     utils::Log{} << "-------" << "\n";
-    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
+    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
     return results;
   }
@@ -903,9 +889,9 @@ namespace Peregrine
     for (int32_t i = edge_based.size()-1; i >= 0; --i) {
       uint64_t count = edge_based[i].second;
       for (uint32_t j = i+1; j < edge_based.size(); ++j) {
+        // mapping edge_based[i].first into edge_based[j].first
         uint32_t n = num_mappings(edge_based[j].first, edge_based[i].first);
         uint64_t inc = n * vbased[j].second;
-        //utils::Log{} << "mapping " << edge_based[i].first.to_string() << " into " << edge_based[j].first.to_string() << ": " << n << "\n";
         count -= inc;
       }
       vbased[i] = {original_patterns[i], count};
@@ -983,8 +969,7 @@ namespace Peregrine
     // make sure the threads are all running
     barrier.join();
 
-    auto t3 = utils::get_timestamp();
-    uint32_t i = 0;
+    auto t1 = utils::get_timestamp();
     for (const auto &p : new_patterns)
     {
       // reset state
@@ -994,22 +979,17 @@ namespace Peregrine
       // set new pattern
       dg.set_rbi(p);
 
-      auto t1 = utils::get_timestamp();
       // begin matching
       barrier.release();
 
       // sleep until matching finished
       barrier.join();
-      auto t2 = utils::get_timestamp();
 
       // get counts
       uint64_t global_count = Context::gcount;
-      //utils::Log{} << p.to_string() << " " << global_count << "\n";
       results.emplace_back(p, global_count);
-
-      utils::Log{} << patterns[i++].to_string() << " finished after " << (t2-t1)/1e6 << "s" << "\n";
     }
-    auto t4 = utils::get_timestamp();
+    auto t2 = utils::get_timestamp();
 
     barrier.finish();
     for (auto &th : pool)
@@ -1023,7 +1003,7 @@ namespace Peregrine
     }
 
     utils::Log{} << "-------" << "\n";
-    utils::Log{} << "all patterns finished after " << (t4-t3)/1e6 << "s" << "\n";
+    utils::Log{} << "all patterns finished after " << (t2-t1)/1e6 << "s" << "\n";
 
 
     return results;

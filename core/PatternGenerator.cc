@@ -223,7 +223,7 @@ namespace Peregrine
         for (auto it : to_delete) result.erase(it);
       }
     }
-    else
+    else // edge-based
     {
       for (const auto &p : from)
       {
@@ -395,12 +395,14 @@ namespace Peregrine
       }
     }
 
+
     std::unordered_set<uint64_t> hashes;
     std::erase_if(result, [&hashes](const SmallGraph &p)
     {
       // erase if hash exists, else insert hash
       uint64_t h = p.bliss_hash();
-      if (hashes.count(h) == 0)
+
+      if (!hashes.contains(h))
       {
         hashes.insert(h);
         return false;

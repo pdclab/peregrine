@@ -44,7 +44,7 @@ namespace Peregrine
       std::vector<uint32_t> labels;
       Graph::Labelling labelling = Graph::UNLABELLED;
     public:
-      friend std::ostream &operator <<(std::ostream &os, const SmallGraph &p )
+      friend std::ostream &operator<<(std::ostream &os, const SmallGraph &p)
       {
         os << p.to_string();
         return os;
@@ -126,10 +126,10 @@ namespace Peregrine
         return labelling;
       }
 
-      auto *bliss_graph() const
+      std::unique_ptr<bliss::Graph> bliss_graph() const
       {
         bliss::Graph bliss_qg;
-        if (labelling == Graph::LABELLED || labelling == Graph::PARTIALLY_LABELLED)
+        if (labelling != Graph::UNLABELLED && labelling != Graph::DISCOVER_LABELS)
         {
           for (size_t i = 0; i < num_vertices(); i++)
           {
@@ -156,7 +156,7 @@ namespace Peregrine
         }
 
         bliss::Stats s;
-        return bliss_qg.permute(bliss_qg.canonical_form(s, NULL, NULL));
+        return std::unique_ptr<bliss::Graph>(bliss_qg.permute(bliss_qg.canonical_form(s, NULL, NULL)));
       }
 
       /**
@@ -164,7 +164,7 @@ namespace Peregrine
        */
       uint64_t bliss_hash() const
       {
-        auto *new_graph = bliss_graph();
+        auto new_graph = bliss_graph();
         return new_graph->get_hash();
       }
 
@@ -216,7 +216,7 @@ namespace Peregrine
       }
 
       std::string to_string() const {
-        if (labelling == Graph::LABELLED || labelling == Graph::PARTIALLY_LABELLED)
+        if (labelling != Graph::UNLABELLED && labelling != Graph::DISCOVER_LABELS)
         {
           return to_string(labels);
         } else {
@@ -972,7 +972,7 @@ namespace Peregrine
           {
             sorted_v[i] = i;
           }
-          std::sort(sorted_v.begin(), sorted_v.end(), [&degs](uint32_t a, uint32_t b) { return degs[a] > degs[b]; });
+          std::sort(sorted_v.begin(), sorted_v.end(), [&degs, this](uint32_t a, uint32_t b) { return degs[a] > degs[b] || query_graph.labels[a] < query_graph.labels[b]; });
 
           for (uint32_t i = 0; i < max_v; ++i)
           {
@@ -1219,7 +1219,27 @@ namespace Peregrine
         // This drastically improves performance on 4-stars with certain labellings, when normally
         // the larger order group is scheduled first
         // Is this a general optimization? Why exactly does it matter?
-        std::sort(order_groups.begin(), order_groups.end(), [](auto &a, auto &b) { return a.size() < b.size(); });
+        {
+          // sort candidate_idxs to match sorted order_groups
+          std::vector<uint32_t> sorted_candidate_idxs(candidate_idxs.size());
+          std::iota(sorted_candidate_idxs.begin(), sorted_candidate_idxs.end(), 0);
+
+          std::sort(sorted_candidate_idxs.begin(), sorted_candidate_idxs.end(),
+              [&](auto i, auto j)
+              {
+                return order_groups[i].size() < order_groups[j].size();
+              });
+
+          std::vector<uint32_t> t(candidate_idxs.size());
+          for (uint32_t i = 0; i < sorted_candidate_idxs.size(); ++i)
+          {
+            t[i] = candidate_idxs[sorted_candidate_idxs[i]];
+          }
+          candidate_idxs.assign(t.cbegin(), t.cend());
+
+          // then sort order groups
+          std::sort(order_groups.begin(), order_groups.end(), [](auto &&a, auto &&b) { return a.size() < b.size(); });
+        }
       }
 
       // connected components of graph given by conditions

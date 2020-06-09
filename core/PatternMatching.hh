@@ -963,7 +963,6 @@ namespace Peregrine
         }
         else
         {
-          const std::vector<uint32_t> &candidate_idxs = rbi.candidate_idxs;
           int8_t sz = p.num_vertices() - vgs_sz;
           // general matcher
           std::vector<uint32_t> ends(sz);

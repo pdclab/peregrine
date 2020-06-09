@@ -30,7 +30,6 @@ namespace Peregrine
     DataGraph(const SmallGraph &p);
     DataGraph(DataGraph &&other);
     DataGraph(DataGraph &) = delete;
-    ~DataGraph();
 
     void set_rbi(const AnalyzedPattern &rbi);
     void set_known_labels(const std::vector<SmallGraph> &patterns);
@@ -59,11 +58,11 @@ namespace Peregrine
     uint64_t edge_count;
     unsigned forest_count;
     bool labelled_graph = false;
-    uint32_t *labels;
+    std::unique_ptr<uint32_t[]> labels;
     std::pair<uint32_t, uint32_t> label_range;
-    uint32_t *ids;
-    adjlist *data_graph;
-    uint32_t *graph_in_memory;
+    std::unique_ptr<uint32_t[]> ids;
+    std::unique_ptr<adjlist[]> data_graph;
+    std::unique_ptr<uint32_t[]> graph_in_memory;
     std::unordered_set<uint32_t> known_labels;
   };
 }

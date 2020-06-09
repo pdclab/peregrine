@@ -1,4 +1,5 @@
 #include <iostream>
+#include <memory>
 
 #include <string>
 #include <cstring>
@@ -18,8 +19,8 @@ namespace Peregrine
   DataGraph::DataGraph(const SmallGraph &pp)
   {
     SmallGraph p(pp);
-    graph_in_memory = new uint32_t[2 * p.num_true_edges()];
-    data_graph = new adjlist[p.num_vertices()+1];
+    graph_in_memory = std::make_unique<uint32_t[]>(2 * p.num_true_edges());
+    data_graph = std::make_unique<adjlist[]>(p.num_vertices()+1);
 
     uint32_t cursor = 0;
     for (uint32_t v = 1; v <= p.num_vertices(); ++v) {
@@ -34,7 +35,7 @@ namespace Peregrine
     vertex_count = p.num_vertices();
     edge_count = p.num_true_edges();
 
-    labels = new uint32_t[p.num_vertices()+1]();
+    labels = std::make_unique<uint32_t[]>(p.num_vertices()+1);
     if (p.labelling == Graph::LABELLED)
     {
       labelled_graph = true;
@@ -60,19 +61,20 @@ namespace Peregrine
     input_graph.read(reinterpret_cast<char *>(&vertex_count), sizeof(vertex_count));
     input_graph.read(reinterpret_cast<char *>(&edge_count), sizeof(edge_count));
 
-    // don't count the header which was 3 32-bit integers
+    // don't count the header (two 32-bit integers)
     assert(st.st_size % 4 == 0);
     uint64_t data_count = st.st_size / 4;
-    graph_in_memory = new uint32_t[data_count - 3];
+    graph_in_memory = std::make_unique<uint32_t[]>(data_count - 2);
 
     uint64_t curr_read_offset = 0;
-    uint32_t read_batch_size = 2147479552;
-    while (input_graph.read(reinterpret_cast<char *>(&graph_in_memory[curr_read_offset/4]), read_batch_size))
+    uint64_t read_batch_size = 2147479552;
+    while (curr_read_offset/4 <= data_count - 2)
     {
+      input_graph.read(reinterpret_cast<char *>(graph_in_memory.get() + curr_read_offset/4), std::min(read_batch_size, (data_count-2)*4-curr_read_offset));
       curr_read_offset += read_batch_size;
     }
 
-    data_graph = new adjlist[vertex_count];
+    data_graph = std::make_unique<adjlist[]>(vertex_count);
 
     uint32_t cursor = 0;
     for (uint32_t i = 0; i < vertex_count; i++)
@@ -82,7 +84,7 @@ namespace Peregrine
       cursor += data_graph[i].length;
     }
 
-    labels = new uint32_t[vertex_count+1]();
+    labels = std::make_unique<uint32_t[]>(vertex_count+1);
     std::ifstream labels_file((data_graph_path + "/labels.bin").c_str(), std::ios::binary);
     if (labels_file)
     {
@@ -108,7 +110,7 @@ namespace Peregrine
     {
       std::ifstream ids_file((data_graph_path + "/ids.bin").c_str(), std::ios::binary);
       assert(ids_file);
-      ids = new uint32_t[vertex_count+1]();
+      ids = std::make_unique<uint32_t[]>(vertex_count+1);
       for (uint32_t i = 1; i <= vertex_count; ++i)
       {
         ids_file.read(reinterpret_cast<char *>(&ids[i]), sizeof(uint32_t));
@@ -122,24 +124,15 @@ namespace Peregrine
       edge_count(other.edge_count),
       forest_count(other.forest_count),
       labelled_graph(other.labelled_graph),
-      labels(other.labels),
+      labels(std::move(other.labels)),
       label_range(other.label_range),
-      ids(other.ids),
-      data_graph(other.data_graph),
-      graph_in_memory(other.graph_in_memory),
+      ids(std::move(other.ids)),
+      data_graph(std::move(other.data_graph)),
+      graph_in_memory(std::move(other.graph_in_memory)),
       known_labels(other.known_labels)
   {
-    other.labels = nullptr;
-    other.data_graph = nullptr;
-    other.graph_in_memory = nullptr;
     other.vertex_count = 0;
     other.edge_count = 0;
-  }
-
-  DataGraph::~DataGraph() {
-    delete[] graph_in_memory;
-    delete[] data_graph;
-    delete[] labels;
   }
 
   void DataGraph::set_rbi(const AnalyzedPattern &new_rbi)

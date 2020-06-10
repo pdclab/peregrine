@@ -3,3 +3,6 @@
 bliss
 bin/*
 !bin/.gitkeep
+data/*
+!data/citeseer/
+*.png

@@ -468,7 +468,7 @@ namespace Peregrine
     }
     else
     {
-      return match_vector<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, data_graph, patterns);
+      return match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable>(process, view, nworkers, data_graph, patterns);
     }
   }
 

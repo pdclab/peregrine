@@ -1,6 +1,7 @@
 #ifndef UTILS_HH
 #define UTILS_HH
 
+#include <execution>
 #include <iostream>
 #include <vector>
 #include <unordered_map>
@@ -83,7 +84,7 @@ void print_set(const std::set<T> &v)
 
 template <typename T>
 bool search(const std::vector<T> &vlist, T key){
-  return std::find(vlist.begin(), vlist.end(), key) != vlist.end();
+  return std::find(std::execution::unseq, vlist.begin(), vlist.end(), key) != vlist.end();
 }
 
 // much slower than linear search unless vlist is large

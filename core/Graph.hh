@@ -466,9 +466,21 @@ namespace Peregrine
           std::erase(true_adj_list[u], v);
           std::erase(true_adj_list[v], u);
         }
+
         std::erase(anti_adj_list[u], v);
         std::erase(anti_adj_list[v], u);
 
+        if (true_adj_list[u].empty())
+        {
+          true_adj_list.erase(u);
+          if (anti_adj_list[u].empty()) anti_adj_list.erase(u);
+        }
+
+        if (true_adj_list[v].empty())
+        {
+          true_adj_list.erase(v);
+          if (anti_adj_list[v].empty()) anti_adj_list.erase(v);
+        }
 
         return *this;
       }

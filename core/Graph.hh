@@ -514,7 +514,8 @@ namespace Peregrine
       std::vector<uint32_t> ncore_vertices;
       std::vector<uint32_t> anti_vertices;
 
-      // vmap[i][j][k] -> ith vgs, jth vertex, kth query sequence
+      // vmap[i][j][k] is the query_graph vertex corresponding to
+      // the jth vertex in the kth query sequence of the ith vgs
       std::vector<std::vector<std::vector<uint32_t>>> vmap;
       std::vector<uint32_t> global_order;
       std::vector<std::vector<uint32_t>> qo_book;
@@ -1008,7 +1009,15 @@ namespace Peregrine
           {
             sorted_v[i] = i;
           }
-          std::sort(sorted_v.begin(), sorted_v.end(), [&degs, this](uint32_t a, uint32_t b) { return degs[a] > degs[b] || query_graph.labels[a] < query_graph.labels[b]; });
+          if (labelling_type() != Graph::UNLABELLED && labelling_type() != Graph::DISCOVER_LABELS)
+          {
+            std::sort(sorted_v.begin(), sorted_v.end(), [&degs, this](uint32_t a, uint32_t b) { return degs[a] > degs[b] || query_graph.labels[a] < query_graph.labels[b]; });
+          }
+          else
+          {
+            std::sort(sorted_v.begin(), sorted_v.end(), [&degs, this](uint32_t a, uint32_t b) { return degs[a] > degs[b]; });
+          }
+
 
           for (uint32_t i = 0; i < max_v; ++i)
           {
@@ -1394,7 +1403,9 @@ namespace Peregrine
         qo_book.push_back({1});
         vgs.push_back(SmallGraph());
         vgs[0].true_adj_list.insert({1, {}});
+        vgs[0].anti_adj_list.insert({1, {}});
         vgs[0].labels = {query_graph.labels[centre-1]};
+        vgs[0].set_labelling(labelling_type());
         vmap = {{{}, {centre}}};
         get_bounds();
         get_indsets();
@@ -1502,13 +1513,25 @@ namespace Peregrine
           build_qo_order();
 
           // make sure .at() never throws
+          // and fix labellings
           {
-            for (auto &s : vgs)
+            for (uint32_t i = 0; i < vgs.size(); ++i)
             {
+              auto &s = vgs[i];
               for (const auto &lst : s.true_adj_list)
               {
                 uint32_t v = lst.first;
                 s.anti_adj_list[v];
+              }
+
+              s.set_labelling(labelling_type());
+              if (s.get_labelling() != Graph::UNLABELLED && s.get_labelling() != Graph::DISCOVER_LABELS)
+              {
+                for (const auto &lst : s.true_adj_list)
+                {
+                  uint32_t v = lst.first;
+                  s.set_label(v, query_graph.label(vmap[i][v][0]));
+                }
               }
             }
           }

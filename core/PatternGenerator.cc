@@ -8,11 +8,15 @@ namespace Peregrine
   std::vector<std::vector<std::pair<uint32_t, uint32_t>>>
   get_elists(uint32_t size);
 
-  SmallGraph PatternGenerator::clique(uint32_t size) {
+  SmallGraph PatternGenerator::clique(uint32_t size)
+  {
     std::vector<std::pair<uint32_t, uint32_t>> edge_list;
-    for (uint32_t u = 1; u <= size; ++u) {
-      for (uint32_t v = 1; v <= size; ++v) {
-        if (u < v) {
+    for (uint32_t u = 1; u <= size; ++u)
+    {
+      for (uint32_t v = 1; v <= size; ++v)
+      {
+        if (u < v)
+        {
           edge_list.push_back({u, v});
         }
       }
@@ -21,13 +25,16 @@ namespace Peregrine
     return SmallGraph(edge_list);
   }
 
-  SmallGraph PatternGenerator::star(uint32_t size) {
-    if (size < 3) {
+  SmallGraph PatternGenerator::star(uint32_t size)
+  {
+    if (size < 3)
+    {
       std::cerr << "Please pass in size > 2, we don't do pattern-matching on single edges/vertices" << std::endl;
     }
 
     std::vector<std::pair<uint32_t, uint32_t>> edge_list;
-    for (uint32_t u = 2; u <= size; ++u) {
+    for (uint32_t u = 2; u <= size; ++u)
+    {
       edge_list.emplace_back(1, u);
     }
 
@@ -416,32 +423,44 @@ namespace Peregrine
     return result;
   }
 
-  std::vector<SmallGraph> PatternGenerator::all(uint32_t size, bool vertex_based, bool anti_edges) {
-    if (size > 9) {
+  std::vector<SmallGraph> PatternGenerator::all(uint32_t size, bool vertex_based, bool anti_edges)
+  {
+    if (size > 9)
+    {
       std::cerr << "Currently don't support generating all patterns of size greater than 9" << std::endl;
     }
 
     std::vector<SmallGraph> result;
-    if (vertex_based) {
+    if (vertex_based)
+    {
       const auto &elists = get_elists(size);
-      for (const auto &el : elists) {
+      for (const auto &el : elists)
+      {
         result.emplace_back(el);
       }
-    } else if (size > 2) {
+    }
+    else if (size > 2)
+    {
       const auto &elists1 = get_elists(size);
-      for (const auto &el : elists1) {
-        if (el.size() == size) {
+      for (const auto &el : elists1)
+      {
+        if (el.size() == size)
+        {
           result.emplace_back(el);
         }
       }
 
-      const auto &elists2 = get_elists(size);
-      for (const auto &el : elists2) {
-        if (el.size() == size) {
+      const auto &elists2 = get_elists(size+1);
+      for (const auto &el : elists2)
+      {
+        if (el.size() == size)
+        {
           result.emplace_back(el);
         }
       }
-    } else {
+    }
+    else
+    {
       result.push_back(star(3));
     }
 

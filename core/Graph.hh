@@ -126,10 +126,10 @@ namespace Peregrine
         return labelling;
       }
 
-      std::unique_ptr<bliss::Graph> bliss_graph() const
+      std::unique_ptr<bliss::Graph> bliss_graph(bool use_labels = true) const
       {
         bliss::Graph bliss_qg;
-        if (labelling != Graph::UNLABELLED && labelling != Graph::DISCOVER_LABELS)
+        if (use_labels && labelling != Graph::UNLABELLED && labelling != Graph::DISCOVER_LABELS)
         {
           for (size_t i = 0; i < num_vertices(); i++)
           {

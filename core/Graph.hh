@@ -1404,8 +1404,11 @@ namespace Peregrine
         vgs.push_back(SmallGraph());
         vgs[0].true_adj_list.insert({1, {}});
         vgs[0].anti_adj_list.insert({1, {}});
-        vgs[0].labels = {query_graph.labels[centre-1]};
         vgs[0].set_labelling(labelling_type());
+        if (!query_graph.labels.empty())
+        {
+          vgs[0].labels = {query_graph.labels[centre-1]};
+        }
         vmap = {{{}, {centre}}};
         get_bounds();
         get_indsets();

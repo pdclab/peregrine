@@ -41,7 +41,7 @@ To build Peregrine:
 ```
 $ git clone https://github.com/pdclab/Peregrine.git
 $ cd Peregrine
-$ source tbb2019/bin/tbbvars.sh intel64
+$ source tbb2020/bin/tbbvars.sh intel64
 $ make -j
 $ bin/test
 ```

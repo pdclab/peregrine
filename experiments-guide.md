@@ -56,7 +56,7 @@ Now we are ready to compile Peregrine:
 ```
 $ cd Peregrine
 $ git checkout eurosys20-experiments
-$ source tbb2019/bin/tbbvars.sh intel64
+$ source tbb2020/bin/tbbvars.sh intel64
 $ make -j count fsm existence-query
 ```
 
@@ -178,7 +178,7 @@ The log files contain the total execution time at the end.
 $ cd Peregrine
 $ make clean
 $ git checkout eurosys20-prg-u
-$ source tbb2019/bin/tbbvars.sh intel64
+$ source tbb2020/bin/tbbvars.sh intel64
 $ make -j count fsm
 $
 $ # 4-motifs

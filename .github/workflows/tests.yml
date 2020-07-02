@@ -24,6 +24,6 @@ jobs:
     - name: install UnitTest++
       run: sudo apt install libunittest++-dev
     - name: make
-      run: source tbb2019/bin/tbbvars.sh intel64 && make -j all test
+      run: source tbb2020/bin/tbbvars.sh intel64 && make -j all test
     - name: run test
-      run: source tbb2019/bin/tbbvars.sh intel64 && bin/test
+      run: source tbb2020/bin/tbbvars.sh intel64 && bin/test

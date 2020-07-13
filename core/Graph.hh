@@ -1256,6 +1256,18 @@ namespace Peregrine
                 }
               }
             }
+
+            // sort ordg based on the conditions. Otherwise a mismatch can
+            // occur depending on the order of the input pattern vertices (for
+            // example, condition 2 < 1 and order group {1, 2}) which leads to
+            // 0 matches!
+            std::sort(ordg.begin(), ordg.end(),
+                [&cond_outadj](uint32_t u, uint32_t v)
+                {
+                  // u comes before v if u < v is a condition
+                  return utils::search(cond_outadj[u-1], v-1);
+                });
+
             order_groups.push_back(ordg);
             candidate_idxs.push_back(rbi_v.num_vertices() + sibling_groups.size()-1);
           }
@@ -1364,10 +1376,10 @@ namespace Peregrine
                   }
                 }
 
-                // only consider noncore vertices we match BEFORE v
-                // we can't do anything about the ones we've yet to match
+                // XXX is this true?
+                // no need to consider noncore vertices: order groups handle that
                 auto is_core = is_core_vertex(u);
-                if (minimal && (!is_core || u < v)) {
+                if (minimal && is_core) {
                   lower_bounds[v].push_back(u);
                 }
               }
@@ -1385,7 +1397,7 @@ namespace Peregrine
                 }
 
                 auto is_core = is_core_vertex(u);
-                if (maximal && (is_core || u < v)) {
+                if (maximal && is_core) {
                   upper_bounds[i].push_back(u);
                 }
               }

@@ -119,7 +119,7 @@ SUITE(GraphPatternAnalysis)
         {1,2}, {1,3}, {1,4}
     });
     AnalyzedPattern r4(s3);
-    CHECK((r4.order_groups.front() == std::vector<uint32_t>{2, 4, 3}));
+    CHECK((r4.order_groups.front() == std::vector<uint32_t>{2, 3, 4}));
     CHECK(r4.sibling_groups.front() == 2);
   }
 

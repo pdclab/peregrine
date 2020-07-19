@@ -14,6 +14,10 @@ To write a Peregrine program, you describe which graph patterns you are interest
 
 For full details, you can read our paper published in [EuroSys 2020](https://dl.acm.org/doi/abs/10.1145/3342195.3387548) or the longer version on [arXiv](https://arxiv.org/abs/2004.02369).
 
+For an in-depth summary, watch the video presentation:
+
+[![EuroSys 2020 Presentation Thumbnail](https://user-images.githubusercontent.com/9058564/87882006-f0871380-c9b1-11ea-9ba0-d632a96b3a42.png)](http://www.youtube.com/watch?v=o3BaYgeR0nQ "Peregrine: A Pattern-Aware Graph Mining System")
+
 **TL;DR:** compared to other state-of-the-art open-source graph mining systems, Peregrine:
 * executes up to 700x faster
 * consumes up to 100x less memory

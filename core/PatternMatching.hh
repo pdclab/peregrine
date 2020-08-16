@@ -627,7 +627,9 @@ namespace Peregrine
           auto range_start = start;
           auto range_end = end;
 
-          for (uint32_t matched : m.mapping)
+          std::vector<uint32_t> sorted_mapping(m.mapping);
+          std::sort(sorted_mapping.begin(), sorted_mapping.end());
+          for (uint32_t matched : sorted_mapping)
           {
             auto it = std::lower_bound(start, end, matched);
 
@@ -795,7 +797,10 @@ namespace Peregrine
             std::vector<std::vector<uint32_t>::iterator> to_delete1;
             std::vector<std::vector<uint32_t>::iterator> to_delete2;
             std::vector<std::vector<uint32_t>::iterator> to_delete3;
-            for (uint32_t matched : m.mapping)
+
+            std::vector<uint32_t> sorted_mapping(m.mapping);
+            std::sort(sorted_mapping.begin(), sorted_mapping.end(), std::greater<uint32_t>());
+            for (uint32_t matched : sorted_mapping)
             {
               // swap to end and resize
               auto it = std::lower_bound(cands1.begin(), cands1.end(), matched);
@@ -963,74 +968,110 @@ namespace Peregrine
         }
         else
         {
-          int8_t sz = p.num_vertices() - vgs_sz;
-          // general matcher
-          std::vector<uint32_t> ends(sz);
-          std::vector<uint32_t> cursors(sz);
-          std::vector<uint32_t> oidxs(sz);
-          std::vector<uint32_t> flat_ordgs(sz);
-          uint8_t ii = 0;
-          for (uint8_t oidx = 0; oidx < ordgs.size(); ++oidx)
           {
-            for (uint32_t jj = 0; jj < ordgs[oidx].size(); ++jj)
+            int8_t sz = p.num_vertices() - vgs_sz;
+            std::vector<uint32_t> cursors(sz);
+            std::vector<uint32_t> oidxs(sz);
+            std::vector<uint32_t> flat_ordgs(sz);
+            uint8_t ii = 0;
+            for (uint8_t oidx = 0; oidx < ordgs.size(); ++oidx)
             {
-              cursors[ii] = views[oidx].first + jj;
-              oidxs[ii] = oidx;
-              flat_ordgs[ii] = ordgs[oidx][jj];
-              ii += 1;
-            }
-          }
-
-          uint8_t idx = 0;
-          while (true)
-          {
-            uint8_t oidx = oidxs[idx];
-            auto [start, end] = views[oidx];
-            const auto &candidates = cands[candidate_idxs[oidx]];
-            uint32_t qv = flat_ordgs[idx];
-
-            auto &cursor = cursors[idx];
-            if (idx == sz-1)
-            {
-              for (uint32_t i = cursor; i < end; ++i)
+              for (uint32_t jj = 0; jj < ordgs[oidx].size(); ++jj)
               {
-                uint32_t dv = candidates[i];
-                CHECK_LABEL(qv, dv);
-                if (!m.data_mapped(dv))
+                cursors[ii] = views[oidx].first + jj;
+                oidxs[ii] = oidx;
+                // XXX: no reason not to do this in advance
+                flat_ordgs[ii] = ordgs[oidx][jj];
+                ii += 1;
+              }
+            }
+
+            uint8_t idx = 0;
+            while (true)
+            {
+              uint8_t oidx = oidxs[idx];
+              const auto [start, end] = views[oidx];
+              uint32_t qv = flat_ordgs[idx];
+              uint32_t cursor = cursors[idx];
+              const auto &candidates = cands[candidate_idxs[oidx]];
+
+              auto cend = candidates.cbegin() + end;
+
+              if (idx == sz-1)
+              {
+
+                auto range_start = candidates.cbegin() + cursor;
+                auto range_end = cend;
+
+                // Important to use m.mapping (instead of mvgs.mapping like in the unmatched.size() == 1 case)
+                // since we may have mapped other things outside of this order group that may be in the candidate set.
+                // Think of chains for example.
+                std::vector<uint32_t> sorted_mapping(m.mapping);
+                std::sort(std::execution::unseq, sorted_mapping.begin(), sorted_mapping.end());
+                for (uint32_t matched : sorted_mapping)
                 {
-                  MAP_UNCHECKED(m, qv, dv);
+                  auto it = std::lower_bound(range_start, cend, matched);
+
+                  // new range
+                  if (it != cend && *it == matched)
+                  {
+                    range_end = it;
+                    for (auto vit = range_start; vit < range_end; ++vit)
+                    {
+                      const uint32_t v = *vit;
+                      CHECK_LABEL(qv, v);
+                      MAP_UNCHECKED(m, qv, v);
+                      m.map(qv, v);
+                      PROCESS(m);
+                    }
+                    m.unmap(qv);
+                    // skip what you're supposed to skip
+                    range_start = range_end + 1;
+                  }
+                }
+
+                for (auto vit = range_start; vit < cend; ++vit)
+                {
+                  const uint32_t v = *vit;
+                  CHECK_LABEL(qv, v);
+                  MAP_UNCHECKED(m, qv, v);
                   PROCESS(m);
-                }
-              }
+                };
 
-              cursor = start;
-              m.unmap(qv);
-              idx -= 1;
-            }
-            else
-            {
-              if (cursor < end)
-              {
-                uint32_t dv = candidates[cursor++];
-                CHECK_LABEL(qv, dv);
-                if (!m.data_mapped(dv))
-                {
-                  MAP_UNCHECKED(m, qv, dv);
-                  // in the same order group, can't have different labels or anything
-                  // so we won't miss anything by setting cursors[idx+1] to cursor+1
-                  if (oidxs[idx+1] == oidx) cursors[idx+1] = cursor;
-                  idx += 1;
-                }
-              }
-              else if (idx == 0)
-              {
-                break;
+                cursors[idx] = start;
+                m.unmap(qv);
+                if (idx == 0) break;
+                idx -= 1;
               }
               else
               {
-                cursor = start;
-                m.unmap(qv);
-                idx -= 1;
+                if (cursors[idx] < end)
+                {
+                  uint32_t dv = candidates[cursor];
+                  cursors[idx] += 1;
+
+                  CHECK_LABEL(qv, dv);
+
+                  // this can't come out of the loop, since you don't know what you mapped in previous iterations
+                  if (!m.data_mapped(dv))
+                  {
+                    MAP_UNCHECKED(m, qv, dv);
+                    // in the same order group, can't have different labels or anything
+                    // so we won't miss anything by setting cursors[idx+1] to cursor+1
+                    if (oidxs[idx+1] == oidx) cursors[idx+1] = cursor + 1;
+                    idx += 1;
+                  }
+                }
+                else if (idx == 0)
+                {
+                  break;
+                }
+                else
+                {
+                  cursors[idx] = start;
+                  m.unmap(qv);
+                  idx -= 1;
+                }
               }
             }
           }
@@ -1711,63 +1752,6 @@ namespace Peregrine
 
           sintersection.clear();
           return (c1 * c2) - xs;
-        }
-        else if (unmatched.size() == 3 && sibgroups.size() == 3 && !HAV && L == Graph::UNLABELLED)
-        {
-          // TODO: only unlabelled!
-
-          std::vector<uint32_t> &cands1 = cands[vgs_sz + 0];
-          std::vector<uint32_t> &cands2 = cands[vgs_sz + 1];
-          std::vector<uint32_t> &cands3 = cands[vgs_sz + 2];
-
-          cands1.erase(std::remove_if(cands1.begin(), cands1.end(),
-                [&m](uint32_t dv) { return m.data_mapped(dv); }),
-              cands1.end());
-          cands2.erase(std::remove_if(cands2.begin(), cands2.end(),
-                [&m](uint32_t dv) { return m.data_mapped(dv); }),
-              cands2.end());
-          cands3.erase(std::remove_if(cands3.begin(), cands3.end(),
-                [&m](uint32_t dv) { return m.data_mapped(dv); }),
-              cands3.end());
-
-          std::vector<uint32_t> &t1 = cands[vgs_sz + 3];
-          t1.clear();
-          std::set_intersection(std::execution::unseq,
-              cands1.cbegin(), cands1.cend(),
-              cands2.cbegin(), cands2.cend(),
-              std::back_inserter(t1));
-          uint32_t s1 = t1.size(); // A & B
-
-          std::vector<uint32_t> &t2 = cands[vgs_sz + 4];
-          t2.clear();
-          std::set_intersection(std::execution::unseq,
-              t1.cbegin(), t1.cend(),
-              cands3.cbegin(), cands3.cend(),
-              std::back_inserter(t2));
-          uint32_t s4 = t2.size(); // A & B & C
-
-
-          t2.clear();
-          std::set_intersection(std::execution::unseq,
-              cands1.cbegin(), cands1.cend(),
-              cands3.cbegin(), cands3.cend(),
-              std::back_inserter(t2));
-          uint32_t s2 = t2.size(); // A & C
-
-          t2.clear();
-          std::set_intersection(std::execution::unseq,
-              cands2.cbegin(), cands2.cend(),
-              cands3.cbegin(), cands3.cend(),
-              std::back_inserter(t2));
-          uint32_t s3 = t2.size(); // B & C
-
-          uint32_t c1 = cands1.size();
-          uint32_t c2 = cands2.size();
-          uint32_t c3 = cands3.size();
-
-          uint64_t count = c1*c2*c3 - (s1*(c3-1)) - (s2*(c2-1)) - (s3*(c1-1)) - s4;
-
-          return count;
         }
         else
         {

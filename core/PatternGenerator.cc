@@ -482,6 +482,7 @@ namespace Peregrine
       }
     }
 
+    std::sort(result.begin(), result.end(), [](auto &&p1, auto &&p2) { return p1.num_true_edges() < p2.num_true_edges(); });
     return result;
   }
 

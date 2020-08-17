@@ -35,7 +35,7 @@ namespace Peregrine
     vertex_count = p.num_vertices();
     edge_count = p.num_true_edges();
 
-    labels = std::make_unique<uint32_t[]>(p.num_vertices()+1);
+    labels = std::make_unique<uint32_t[]>(vertex_count+1);
     if (p.labelling == Graph::LABELLED)
     {
       labelled_graph = true;
@@ -44,6 +44,10 @@ namespace Peregrine
         labels[u+1] = p.labels[u];
       }
     }
+
+
+    ids = std::make_unique<uint32_t[]>(vertex_count+1);
+    std::iota(&ids[0], &ids[vertex_count+1], 0);
   }
 
   DataGraph::DataGraph(std::string data_graph_path)

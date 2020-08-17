@@ -1,28 +1,9 @@
 #include "../Peregrine.hh"
 
-std::vector<uint64_t> vtx_counts = {
-  111153, // [2-3][1-2][1-4](3~4)(2~4)(1~3)
-  222630, // [1-2][1-3][1-4](3~4)(2~3)(2~4)
-  22900,  // [2-3][1-2][1-3][1-4](3~4)(2~4)
-  3094,   // [3-4][2-3][1-2][1-4](2~4)(1~3)
-  2200,   // [3-4][2-3][1-2][1-3][1-4](2~4)
-  255,    // [3-4][2-3][2-4][1-2][1-3][1-4]
-};
-
-std::vector<uint64_t> edge_counts = {
-  185589, // [2-3][1-2][1-4]
-  250950, // [1-2][1-3][1-4]
-  34760,  // [2-3][1-2][1-3][1-4]
-  6059,   // [3-4][2-3][1-2][1-4]
-  3730,   // [3-4][2-3][1-2][1-3][1-4]
-  255,    // [3-4][2-3][2-4][1-2][1-3][1-4]
-};
-
 TEST(CountingIntegration)
 {
   // the pattern matching unit tests check correctness for counting, this is
   // just to make sure nothing gets messed up at the boundary of the Counter
-
   const std::string data_graph_name("data/citeseer");
   size_t nthreads = std::thread::hardware_concurrency();
 
@@ -30,32 +11,75 @@ TEST(CountingIntegration)
 
   auto t1 = utils::get_timestamp();
 
-  uint32_t k = 4;
+  for (unsigned k : {4, 5, 6})
   {
-    // include anti-edges
-    std::vector<Peregrine::SmallGraph> patterns = Peregrine::PatternGenerator::all(k,
-        Peregrine::PatternGenerator::VERTEX_BASED,
-        Peregrine::PatternGenerator::INCLUDE_ANTI_EDGES);
-
-    auto res = Peregrine::count(data_graph_name, patterns, nthreads);
-    int i = 0;
-    for (auto &[p, count] : res)
     {
-      CHECK_EQUAL(vtx_counts[i++], count);
+      std::unordered_map<Peregrine::SmallGraph, uint64_t> truth;
+      {
+        std::ifstream truth_file("core/integrationtests/truth/" + std::to_string(k) + "m.txt");
+        CHECK(truth_file.is_open());
+
+        // Using the graph string representation may be expensive, but the test is
+        // fast _enough_ and this makes the truth file human readable.
+        std::string id;
+        uint64_t count;
+        while (truth_file >> id >> count)
+        {
+          Peregrine::SmallGraph p = from_string(id);
+          truth[p] = count;
+        }
+      }
+
+      std::cout << k << "-MOTIFS VERTEX-INDUCED" << std::flush;
+      auto tt1 = utils::get_timestamp();
+      // include anti-edges
+      std::vector<Peregrine::SmallGraph> patterns = Peregrine::PatternGenerator::all(k,
+          Peregrine::PatternGenerator::VERTEX_BASED,
+          Peregrine::PatternGenerator::INCLUDE_ANTI_EDGES);
+
+      auto res = Peregrine::count(data_graph_name, patterns, nthreads);
+      for (auto &[p, count] : res)
+      {
+        CHECK_EQUAL(truth.at(p), count);
+      }
+      auto tt2 = utils::get_timestamp();
+      std::cout << "\t✓ " << (tt2-tt1)/1e6 << "s" << std::endl;
     }
-  }
 
-  {
-    // exclude anti-edges
-    std::vector<Peregrine::SmallGraph> patterns = Peregrine::PatternGenerator::all(k,
-        Peregrine::PatternGenerator::VERTEX_BASED,
-        Peregrine::PatternGenerator::EXCLUDE_ANTI_EDGES);
 
-    auto res = Peregrine::count(data_graph_name, patterns, nthreads);
-    int i = 0;
-    for (auto &[p, count] : res)
     {
-      CHECK_EQUAL(edge_counts[i++], count);
+      std::unordered_map<Peregrine::SmallGraph, uint64_t> truth;
+      {
+        std::ifstream truth_file("core/integrationtests/truth/" + std::to_string(k) + "m-edge.txt");
+        CHECK(truth_file.is_open());
+
+        // Using the graph string representation may be expensive, but the test is
+        // fast _enough_ and this makes the truth file human readable.
+        std::string id;
+        uint64_t count;
+        while (truth_file >> id >> count)
+        {
+          Peregrine::SmallGraph p = from_string(id);
+          truth[p] = count;
+        }
+      }
+
+      std::cout << k << "-MOTIFS EDGE-INDUCED" << std::flush;
+      auto tt1 = utils::get_timestamp();
+
+      // exclude anti-edges
+      std::vector<Peregrine::SmallGraph> patterns = Peregrine::PatternGenerator::all(k,
+          Peregrine::PatternGenerator::VERTEX_BASED,
+          Peregrine::PatternGenerator::EXCLUDE_ANTI_EDGES);
+
+      auto res = Peregrine::count(data_graph_name, patterns, nthreads);
+      for (auto &[p, count] : res)
+      {
+        CHECK_EQUAL(truth.at(p), count);
+      }
+
+      auto tt2 = utils::get_timestamp();
+      std::cout << "\t✓ " << (tt2-tt1)/1e6 << "s" << std::endl;
     }
   }
 

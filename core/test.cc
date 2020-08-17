@@ -4,6 +4,7 @@
 #include "unittests/Graph_test.hh"
 #include "unittests/PatternGenerator_test.hh"
 #include "unittests/PatternMatching_test.hh"
+#include "TestCommon.hh"
 
 #include "integrationtests/Counting_test.hh"
 #include "integrationtests/Matching_test.hh"

@@ -1,36 +1,6 @@
 #include "../Peregrine.hh"
 #include "../../apps/Domain.hh"
 
-auto from_string(const std::string &str)
-{
-  Peregrine::SmallGraph p;
-  {
-    unsigned c = 0;
-    while (c < str.size())
-    {
-      if (str[c] == '[')
-      {
-        unsigned edge_start = c;
-        while (str[c] != ']' && c < str.size()) c += 1;
-        // edges are in format [u,lu-v,lv] where each is a one digit integer
-        assert(c-edge_start == 8);
-
-        uint32_t u = str[edge_start+1] - '0';
-        uint32_t lu = str[edge_start+3] - '0';
-        uint32_t v = str[edge_start+5] - '0';
-        uint32_t lv = str[edge_start+7] - '0';
-
-        p.add_edge(u, v);
-        p.set_label(u, lu);
-        p.set_label(v, lv);
-      }
-      c += 1;
-    }
-  }
-
-  return p;
-}
-
 
 TEST(MatchingIntegration)
 {
@@ -43,7 +13,7 @@ TEST(MatchingIntegration)
 
   std::vector<std::unordered_map<Peregrine::SmallGraph, uint64_t>> truth(k-1);
   {
-    std::ifstream truth_file("core/integrationtests/cs-supports.txt");
+    std::ifstream truth_file("core/integrationtests/truth/cs-supports.txt");
     CHECK(truth_file.is_open());
 
     // Using the graph string representation may be expensive, but the test is
@@ -52,7 +22,7 @@ TEST(MatchingIntegration)
     uint64_t supp;
     while (truth_file >> id >> supp)
     {
-      Peregrine::SmallGraph p = from_string(id);
+      Peregrine::SmallGraph p = from_string_labelled(id);
       truth[p.num_true_edges()-2][p] = supp;
     }
   }

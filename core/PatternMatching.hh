@@ -525,9 +525,18 @@ namespace Peregrine
 
           if (!upper.empty())
           {
-            uint32_t upper_bound = *std::min_element(upper.begin(), upper.end(),
-                [&m](uint32_t a, uint32_t b) { return m.at(a) < m.at(b); });
-            end = std::lower_bound(start, end, m.at(upper_bound));
+            bool check_upper_bound = true;
+            if constexpr (HAE)
+            {
+              check_upper_bound = rbi.check_sibg_bound[idx];
+            }
+
+            if (check_upper_bound)
+            {
+              uint32_t upper_bound = *std::min_element(upper.begin(), upper.end(),
+                  [&m](uint32_t a, uint32_t b) { return m.at(a) < m.at(b); });
+              end = std::lower_bound(start, end, m.at(upper_bound));
+            }
           }
 
           candidates.assign(start, end);

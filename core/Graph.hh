@@ -311,15 +311,15 @@ namespace Peregrine
       SmallGraph(std::vector<std::pair<uint32_t,uint32_t>> iedge_list)
         : labelling(Graph::UNLABELLED)
       {
-          for (const auto &edge : iedge_list) {
+        for (const auto &edge : iedge_list) {
 
-              true_adj_list[edge.first].push_back(edge.second);
-              true_adj_list[edge.second].push_back(edge.first);
-          }
-          labels.resize(num_vertices());
+            true_adj_list[edge.first].push_back(edge.second);
+            true_adj_list[edge.second].push_back(edge.first);
+        }
+        labels.resize(num_vertices());
 
-          // make sure anti_adj_list.at() doesn't fail
-          for (uint32_t v = 1; v <= num_vertices(); ++v) anti_adj_list[v];
+        // make sure anti_adj_list.at() doesn't fail
+        for (uint32_t v = 1; v <= num_vertices(); ++v) anti_adj_list[v];
       }
 
       /**
@@ -525,6 +525,8 @@ namespace Peregrine
       std::vector<std::vector<uint32_t>> upper_bounds;
 
       std::vector<uint32_t> sibling_groups;
+      std::vector<bool> check_sibg_bound;
+
       std::vector<std::vector<uint32_t>> order_groups;
       std::vector<uint32_t> candidate_idxs;
 
@@ -537,26 +539,37 @@ namespace Peregrine
 
       AnalyzedPattern() {}
 
+      AnalyzedPattern(const AnalyzedPattern &other)
+        : query_graph(other.query_graph)
+      {
+        check_connected();
+        get_anti_vertices();
+        check_anti_vertices();
+        check_labels();
+        conditions = get_conditions();
+        build_rbi_graph();
+      }
+
       AnalyzedPattern(const SmallGraph &p)
         : query_graph(p)
       {
-          check_connected();
-          get_anti_vertices();
-          check_anti_vertices();
-          check_labels();
-          conditions = get_conditions();
-          build_rbi_graph();
+        check_connected();
+        get_anti_vertices();
+        check_anti_vertices();
+        check_labels();
+        conditions = get_conditions();
+        build_rbi_graph();
       }
 
       AnalyzedPattern(std::string inputfile)
         : query_graph(inputfile)
       {
-          check_connected();
-          get_anti_vertices();
-          check_anti_vertices();
-          check_labels();
-          conditions = get_conditions();
-          build_rbi_graph();
+        check_connected();
+        get_anti_vertices();
+        check_anti_vertices();
+        check_labels();
+        conditions = get_conditions();
+        build_rbi_graph();
       }
 
       Graph::Labelling labelling_type() const
@@ -999,9 +1012,16 @@ namespace Peregrine
           // construct bliss graph with vertices sorted by degree
           std::vector<uint32_t> degs(max_v);
           // regular vertex anti-edges should not
+
+          std::vector<std::vector<uint32_t>> nbr_degs(max_v);
+
           for (const auto &[u, nbrs] : query_graph.true_adj_list)
           {
             degs[u-1] = nbrs.size();
+            for (uint32_t v : nbrs)
+            {
+              nbr_degs[u-1].push_back(v);
+            }
           }
 
           std::vector<uint32_t> sorted_v(max_v);
@@ -1009,13 +1029,26 @@ namespace Peregrine
           {
             sorted_v[i] = i;
           }
+
           if (labelling_type() != Graph::UNLABELLED && labelling_type() != Graph::DISCOVER_LABELS)
           {
-            std::sort(sorted_v.begin(), sorted_v.end(), [&degs, this](uint32_t a, uint32_t b) { return degs[a] > degs[b] || query_graph.labels[a] < query_graph.labels[b]; });
+            std::sort(sorted_v.begin(), sorted_v.end(),
+                [&degs, &nbr_degs, this](uint32_t a, uint32_t b)
+                {
+                  return degs[a] > degs[b]
+                    || (degs[a] == degs[b] && nbr_degs[a] > nbr_degs[b])
+                    || (degs[a] == degs[b] && nbr_degs[a] == nbr_degs[b] && query_graph.labels[a] < query_graph.labels[b]);
+                });
           }
           else
           {
-            std::sort(sorted_v.begin(), sorted_v.end(), [&degs, this](uint32_t a, uint32_t b) { return degs[a] > degs[b]; });
+            std::sort(sorted_v.begin(), sorted_v.end(),
+                [&degs, &nbr_degs, this](uint32_t a, uint32_t b)
+                {
+                  return degs[a] > degs[b]
+                    || (degs[a] == degs[b] && nbr_degs[a] > nbr_degs[b]);
+                    //|| (degs[a] == degs[b] && nbr_degs[a] == nbr_degs[b] && a > b);
+                });
           }
 
 
@@ -1028,7 +1061,7 @@ namespace Peregrine
           {
             for (size_t i = 0; i < max_v; i++)
             {
-                bliss_qg.add_vertex(query_graph.labels[sorted_v[i]]);
+              bliss_qg.add_vertex(query_graph.labels[sorted_v[i]]);
             }
           }
           else
@@ -1067,10 +1100,12 @@ namespace Peregrine
           for (const auto &cond : conds)
           {
             // make sure anti-vertex conditions are not used
-            if (!is_anti_vertex(cond.first) && !is_anti_vertex(cond.second))
+            if (cond.first <= max_v && cond.second <= max_v)
             {
-              result.emplace_back(sorted_v[cond.first-1]+1,
-                  sorted_v[cond.second-1]+1);
+              uint32_t u = sorted_v[cond.first-1] + 1;
+              uint32_t v = sorted_v[cond.second-1] + 1;
+              assert(!is_anti_vertex(u) && !is_anti_vertex(v));
+              result.emplace_back(u, v);
             }
             else
             {
@@ -1093,8 +1128,8 @@ namespace Peregrine
 
             nautsets += 1;
           }
-
         }
+
 
         // turn off conditions:
         // result = {};
@@ -1224,8 +1259,6 @@ namespace Peregrine
             }
           }
 
-          sibling_groups.push_back(ordering[i]);
-
           // generate order groups
           // group are already partially ordered, just need to extract connected components
           // i.e., order groups are just indsets in a SiblingGroup's group
@@ -1267,6 +1300,39 @@ namespace Peregrine
                   // u comes before v if u < v is a condition
                   return utils::search(cond_outadj[u-1], v-1);
                 });
+
+
+            // push sibling group after sorting so that its bounds are
+            // guaranteed correct
+            sibling_groups.push_back(ordg.front());
+            check_sibg_bound.push_back(true);
+
+            // now we need to check if the ordg should be broken up
+            // this only happens with anti-edges.
+            // e.g. [1-2][1-3][1-4](2~3)(3~4): 2 < 3 < 4 and 2 and 4 have the
+            // same core neighbours. But upper_bound[2] == lower_bound[4] == 3.
+            // We can only do this now that the order group is sorted wrt conds,
+            // otherwise checking the previous member of the order group
+            // doesn't make sense.
+            if (has_anti_edges())
+            {
+              unsigned sz = ordg.size();
+              for (unsigned i = 1; i < sz; ++i)
+              {
+                uint32_t u = ordg[i-1];
+                uint32_t v = ordg[i];
+
+                if (upper_bounds[u] == lower_bounds[v])
+                {
+                  std::vector<uint32_t> partition(&ordg[0], &ordg[i]);
+                  order_groups.push_back(partition);
+                  candidate_idxs.push_back(rbi_v.num_vertices() + sibling_groups.size()-1);
+                  ordg.erase(ordg.begin(), std::next(ordg.begin(), i));
+                  sz = ordg.size();
+                  check_sibg_bound.back() = false;
+                }
+              }
+            }
 
             order_groups.push_back(ordg);
             candidate_idxs.push_back(rbi_v.num_vertices() + sibling_groups.size()-1);
@@ -1376,7 +1442,6 @@ namespace Peregrine
                   }
                 }
 
-                // XXX is this true?
                 // no need to consider noncore vertices: order groups handle that
                 auto is_core = is_core_vertex(u);
                 if (minimal && is_core) {

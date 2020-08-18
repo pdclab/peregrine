@@ -60,8 +60,8 @@ SUITE(GraphPatternAnalysis)
     CHECK_EQUAL(r1.conditions[0].first,  1);
     CHECK_EQUAL(r1.conditions[0].second, 2);
 
-    CHECK_EQUAL(r2.conditions[0].first,  2);
-    CHECK_EQUAL(r2.conditions[0].second, 3);
+    CHECK_EQUAL(r2.conditions[0].first,  3);
+    CHECK_EQUAL(r2.conditions[0].second, 2);
   }
 
   TEST(IndSetsUnlabelled)

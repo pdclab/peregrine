@@ -2055,7 +2055,7 @@ namespace Peregrine
 
   uint32_t num_mappings(SmallGraph &data_graph, const SmallGraph &p)
   {
-    std::vector<std::vector<uint32_t>> cands(p.num_vertices()+1, std::vector<uint32_t>{});
+    std::vector<std::vector<uint32_t>> cands(p.num_vertices()+2, std::vector<uint32_t>{});
 
     DataGraph dg(data_graph);
     dg.set_rbi(p);

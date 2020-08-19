@@ -1008,30 +1008,6 @@ namespace Peregrine
 
     return results;
   }
-
-  uint32_t num_mappings(const SmallGraph &data_graph, const SmallGraph &p)
-  {
-    std::vector<std::vector<uint32_t>> cands(p.num_vertices()+1, std::vector<uint32_t>{});
-
-    DataGraph dg(data_graph);
-    dg.set_rbi(p);
-
-    uint32_t num_vertices = dg.get_vertex_count();
-    uint32_t vgs_count = dg.get_vgs_count();
-
-    uint64_t count = 0;
-    const auto process = [&count](const CompleteMatch &) -> void { count += 1; };
-    for (uint32_t vgsi = 0; vgsi < vgs_count; ++vgsi)
-    {
-      Matcher<false, UNSTOPPABLE, decltype(process)> m(dg.rbi, &dg, vgsi, cands, process);
-      for (uint32_t v = 1; v <= num_vertices; ++v)
-      {
-        m.map_into<Graph::UNLABELLED>(v);
-      }
-    }
-    return count;
-  }
-
 } // namespace Peregrine
 
 #endif

@@ -1051,7 +1051,6 @@ namespace Peregrine
                 });
           }
 
-
           for (uint32_t i = 0; i < max_v; ++i)
           {
             mapping[sorted_v[i]] = i;
@@ -1463,7 +1462,7 @@ namespace Peregrine
 
                 auto is_core = is_core_vertex(u);
                 if (maximal && is_core) {
-                  upper_bounds[i].push_back(u);
+                  upper_bounds[v].push_back(u);
                 }
               }
             }

@@ -1688,6 +1688,8 @@ namespace Peregrine
 
             for (uint32_t dv : m.mapping)
             {
+              if (gpb->label(dv) != label) continue; // don't look for irrelevant labels
+
               n -= std::binary_search(candidates.cbegin(), candidates.cend(), dv)
                 ? 1 : 0;
             }
@@ -1718,11 +1720,18 @@ namespace Peregrine
                 candidates.cbegin(),
                 candidates.cend(),
                 [this, &label](uint32_t dv) { return gpb->label(dv) == label; });
-          }
 
-          for (uint32_t dv : m.mapping)
+            for (uint32_t dv : m.mapping)
+            {
+              if (gpb->label(dv) != label) continue; // don't look for irrelevant labels 
+
+              n -= std::binary_search(candidates.cbegin(), candidates.cend(), dv)
+                ? 1 : 0;
+            }
+          }
+          else
           {
-            if (dv != 0)
+            for (uint32_t dv : m.mapping)
             {
               n -= std::binary_search(candidates.cbegin(), candidates.cend(), dv)
                 ? 1 : 0;

@@ -53,6 +53,11 @@ namespace Peregrine
     
       size_t start = thread_id * task_size;
       size_t end = start + task_size;
+
+      if (thread_id == nthreads - 1)
+      {
+        end = file_size;
+      }
     
       // don't start from middle of a line in the file
       if (nthreads == 1 || thread_id != 0)
@@ -109,6 +114,11 @@ namespace Peregrine
     {
       size_t start = thread_id * task_size;
       size_t end = start + task_size;
+
+      if (thread_id == nthreads - 1)
+      {
+        end = file_size;
+      }
     
       // don't start from middle of a line in the file
       if (nthreads == 1 || thread_id != 0)

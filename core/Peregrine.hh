@@ -856,11 +856,10 @@ namespace Peregrine
       uint32_t l = 0;
       for (auto &m : aggregator.latest_result)
       {
-        ls[pl] = l;
+        ls[pl] = aggregator.VEC_AGG_OFFSET + l;
         results.emplace_back(SmallGraph(p, ls), m.load());
         l += 1;
       }
-
     }
     auto t2 = utils::get_timestamp();
 

@@ -1,6 +1,5 @@
 ROOT_DIR:=$(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 LDFLAGS=-L $(ROOT_DIR)/core/bliss-0.73/ -lbliss -L/usr/local/lib -lpthread -latomic -Ltbb2020/lib/intel64/gcc4.8 -ltbb
-#LDFLAGS=-L $(ROOT_DIR)/core/bliss-0.73/ -lbliss -L/usr/local/lib -lpthread -latomic -L$(LD_LIBRARY_PATH) -ltbb
 CFLAGS=-O3 -std=c++2a -Wall -Wextra -Wpedantic -fPIC -fconcepts -I$(ROOT_DIR)/core/ -Itbb2020/include
 OBJ=core/DataGraph.o core/PO.o core/utils.o core/PatternGenerator.o $(ROOT_DIR)/core/showg.o
 OUTDIR=bin/
@@ -28,7 +27,6 @@ test: core/test.cc $(OBJ) core/DataConverter.o core/roaring.o bliss
 
 convert_data: core/convert_data.cc core/DataConverter.o core/utils.o
 	$(CC) -o $(OUTDIR)/$@ $? $(LDFLAGS) $(CFLAGS)
-	##$(CC) -o $(OUTDIR)/$@ $? -L/usr/local/lib -lpthread -latomic -L$(LD_LIBRARY_PATH) -ltbb $(CFLAGS)
 
 bliss:
 	make -C ./core/bliss-0.73

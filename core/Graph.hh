@@ -52,7 +52,7 @@ namespace Peregrine
 
       uint32_t num_vertices() const
       {
-        return true_adj_list.size();
+        return v_list().size();
       }
 
       uint32_t num_anti_vertices() const
@@ -60,7 +60,7 @@ namespace Peregrine
         uint32_t c = 0;
         for (const auto &[u, _] : anti_adj_list)
         {
-          if (!true_adj_list.contains(u)) c += 1;
+          if (true_adj_list.at(u).empty()) c += 1;
         }
         return c;
       }
@@ -97,10 +97,27 @@ namespace Peregrine
         return count / 2;
       }
 
+      // returns only true vertices
       std::vector<uint32_t> v_list() const
       {
         std::vector<uint32_t> vs;
-        for (const auto &[v, _] : true_adj_list) vs.push_back(v);
+        for (const auto &[v, adj] : true_adj_list)
+        {
+          if (!adj.empty())
+          {
+            vs.push_back(v);
+          }
+        }
+
+        // if the pattern consists of a single vertex
+        if (vs.empty() && true_adj_list.size() == 1)
+        {
+          uint32_t v = true_adj_list.begin()->first;
+          if (anti_adj_list.at(v).empty())
+          {
+            vs.push_back(true_adj_list.begin()->first);
+          }
+        }
 
         std::sort(std::execution::unseq, vs.begin(), vs.end());
         return vs;
@@ -172,7 +189,7 @@ namespace Peregrine
       {
         if (labelling == Graph::LABELLED || labelling == Graph::PARTIALLY_LABELLED)
         {
-          assert(given_labels.size() >= num_vertices() + num_anti_vertices());
+          assert(given_labels.size() >= num_vertices());
           std::string res("");
 
           std::vector<uint32_t> vertices(num_vertices());
@@ -286,7 +303,7 @@ namespace Peregrine
 
       Graph::Labelling determine_labelling() const
       {
-        if (labels.size() == num_vertices() + num_anti_vertices())
+        if (labels.size() == num_vertices())
         {
           Graph::Labelling l = Graph::LABELLED;
 
@@ -319,7 +336,7 @@ namespace Peregrine
         labels.resize(num_vertices());
 
         // make sure anti_adj_list.at() doesn't fail
-        for (uint32_t v = 1; v <= num_vertices(); ++v) anti_adj_list[v];
+        for (auto [v, _] : true_adj_list) anti_adj_list[v];
       }
 
       /**
@@ -344,7 +361,7 @@ namespace Peregrine
         }
 
         // make sure anti_adj_list.at() doesn't fail
-        for (uint32_t v = 1; v <= num_vertices(); ++v) anti_adj_list[v];
+        for (auto [v, _] : true_adj_list) anti_adj_list[v];
       }
 
       SmallGraph(std::string inputfile)
@@ -400,7 +417,7 @@ namespace Peregrine
           }
 
           // make sure anti_adj_list.at() doesn't fail
-          for (uint32_t v = 1; v <= num_vertices(); ++v) anti_adj_list[v];
+          for (auto [v, _] : true_adj_list) anti_adj_list[v];
       }
 
       /**
@@ -419,6 +436,9 @@ namespace Peregrine
             labels.push_back(static_cast<uint32_t>(-1));
           }
         }
+
+        true_adj_list[u];
+        true_adj_list[v];
 
         return *this;
       }
@@ -440,13 +460,16 @@ namespace Peregrine
           }
         }
 
+        anti_adj_list[u];
+        anti_adj_list[v];
+
         return *this;
       }
 
       SmallGraph &set_label(uint32_t u, uint32_t l)
       {
         // resize always: don't assume all edges have already been added
-        labels.resize(std::max({u, num_vertices() + num_anti_vertices(), static_cast<uint32_t>(labels.size())}));
+        labels.resize(std::max({u, num_vertices(), static_cast<uint32_t>(labels.size())}));
 
         labels[u-1] = l;
         labelling = l == static_cast<uint32_t>(-1) ? Graph::PARTIALLY_LABELLED : Graph::LABELLED;
@@ -456,7 +479,7 @@ namespace Peregrine
 
       bool is_anti_vertex(uint32_t v) const
       {
-        return anti_adj_list.contains(v) && !true_adj_list.contains(v);
+        return !anti_adj_list.at(v).empty() && true_adj_list.at(v).empty();
       }
 
       SmallGraph &remove_edge(uint32_t u, uint32_t v)
@@ -469,18 +492,6 @@ namespace Peregrine
 
         std::erase(anti_adj_list[u], v);
         std::erase(anti_adj_list[v], u);
-
-        if (true_adj_list[u].empty())
-        {
-          true_adj_list.erase(u);
-          if (anti_adj_list[u].empty()) anti_adj_list.erase(u);
-        }
-
-        if (true_adj_list[v].empty())
-        {
-          true_adj_list.erase(v);
-          if (anti_adj_list[v].empty()) anti_adj_list.erase(v);
-        }
 
         return *this;
       }
@@ -687,7 +698,7 @@ namespace Peregrine
       {
         assert(query_graph.num_vertices() != 0);
         uint32_t n = query_graph.num_vertices();
-        return anti_vertices.empty() && query_graph.num_true_edges() == (n*(n-1))/2;
+        return n > 2 && anti_vertices.empty() && query_graph.num_true_edges() == (n*(n-1))/2;
       }
 
       uint32_t match_po(const std::vector<uint32_t> &v_list, const std::vector<std::pair<uint32_t, uint32_t>> &po)
@@ -712,9 +723,12 @@ namespace Peregrine
       bool is_connected(const std::vector<uint32_t> &vertex_cover, const std::unordered_map<uint32_t, std::vector<uint32_t>> &adj_list) const
       {
           std::vector<std::vector<uint32_t>> graph(*max_element(vertex_cover.begin(), vertex_cover.end()) + 1);
-          for (auto &v : adj_list)
+          for (auto &[v, adj] : adj_list)
           {
-              graph[v.first] = v.second;
+            if (!adj.empty())
+            {
+              graph[v] = adj;
+            }
           }
           std::vector<bool> visited(graph.size() + 1, true);
 
@@ -778,6 +792,7 @@ namespace Peregrine
         for (uint32_t v : vertex_cover)
         {
           v_cover_graph.true_adj_list[v];
+          v_cover_graph.anti_adj_list[v];
         }
 
         if (labelling_type() == Graph::LABELLED || labelling_type() == Graph::PARTIALLY_LABELLED)
@@ -901,7 +916,7 @@ namespace Peregrine
             n_vseq.true_adj_list[current_vid].push_back(new_nbr_vid);
           }
 
-          if (patt.anti_adj_list.contains(v))
+          if (!patt.anti_adj_list.at(v).empty())
           {
             for (size_t j = 0; j < patt.anti_adj_list.at(v).size(); j++)
             {
@@ -917,6 +932,17 @@ namespace Peregrine
             }
           }
         }
+
+        for (auto [u, _] : n_vseq.true_adj_list)
+        {
+          n_vseq.anti_adj_list[u];
+        }
+
+        for (auto [u, _] : n_vseq.anti_adj_list)
+        {
+          n_vseq.true_adj_list[u];
+        }
+
         return n_vseq;
       }
 
@@ -1190,6 +1216,8 @@ namespace Peregrine
         }
       }
 
+      // XXX: this is wrong, no? rbi_v is normalized! need to convert it to
+      // core vertex through vmap or whatever
       bool is_core_vertex(uint32_t v) const
       {
         return rbi_v.true_adj_list.contains(v);
@@ -1479,6 +1507,7 @@ namespace Peregrine
 
         uint32_t centre = *rbi_v.v_list().begin();
         qo_book.push_back({1});
+        qs.emplace_back(std::vector<std::vector<uint32_t>>{1});
         vgs.push_back(SmallGraph());
         vgs[0].true_adj_list.insert({1, {}});
         vgs[0].anti_adj_list.insert({1, {}});
@@ -1616,6 +1645,11 @@ namespace Peregrine
               }
             }
           }
+
+        for (uint32_t i = 0; i < rbi_v.num_vertices(); ++i)
+        {
+          rbi_v.anti_adj_list[i+1];
+        }
       }
 
       void get_qo(const SmallGraph &vgs, uint32_t source, uint32_t vgs_id, std::vector<bool> &visited)

@@ -539,6 +539,8 @@ namespace Peregrine
 
       AnalyzedPattern() {}
 
+      AnalyzedPattern& operator=(const AnalyzedPattern&) = default; // copy assignment
+
       AnalyzedPattern(const AnalyzedPattern &other)
         : query_graph(other.query_graph)
       {

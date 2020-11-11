@@ -40,13 +40,20 @@ Peregrine has been tested on Ubuntu 18.04 and Arch Linux but should work on any
 POSIX-y OS. It requires C++20 support (GCC version >= 9.2.1). Additionally, the
 tests require [UnitTest++](https://github.com/unittest-cpp/unittest-cpp).
 
+Ubuntu 18.04 prerequisites:
+```
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt-get update
+sudo apt install g++-10 libunittest++-dev
+```
+
 To build Peregrine:
 
 ```
 $ git clone https://github.com/pdclab/Peregrine.git
 $ cd Peregrine
 $ source tbb2020/bin/tbbvars.sh intel64
-$ make -j
+$ make -j CC=g++-10
 $ bin/test
 ```
 

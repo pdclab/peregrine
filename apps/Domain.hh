@@ -95,17 +95,20 @@ struct Domain
 };
 
 
+// label discovery with one or two edges: num_edges should be either 1 or 2
+template <unsigned int num_edges>
 struct DiscoveryDomain
 {
-  DiscoveryDomain() : sets(2)
+  DiscoveryDomain() : sets(num_edges)
   {}
 
-  DiscoveryDomain(const std::pair<std::vector<uint32_t>, uint32_t> &p) : sets(1 + p.second)
+  DiscoveryDomain(const std::pair<std::vector<uint32_t>, uint32_t> &p) : sets(num_edges + p.second)
   {
     auto &m = p.first;
+
     sets[0].add(m[0]);
-    sets[1].add(m[1]);
-    sets[p.second].add(m[2]); // if merge
+    if constexpr (num_edges == 2) sets[1].add(m[1]);
+    sets[p.second].add(m[num_edges]); // if merge
   }
 
   DiscoveryDomain &operator+=(const DiscoveryDomain &d)
@@ -126,8 +129,8 @@ struct DiscoveryDomain
     sets.resize(1+p.second);
     auto &m = p.first;
     sets[0].add(m[0]);
-    sets[1].add(m[1]);
-    sets[p.second].add(m[2]); // if merge
+    if constexpr (num_edges == 2) sets[1].add(m[1]);
+    sets[p.second].add(m[num_edges]); // if merge
 
     return *this;
   }

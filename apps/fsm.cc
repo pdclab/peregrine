@@ -32,13 +32,13 @@ int main(int argc, char *argv[])
   auto t1 = utils::get_timestamp();
   {
     const auto process = [](auto &&a, auto &&cm) {
-      uint32_t merge = cm.pattern[1] == cm.pattern[2] ? 1 : 2;
+      uint32_t merge = cm.pattern[0] == cm.pattern[1] ? 0 : 1;
       a.map(cm.pattern, std::make_pair(cm.mapping, merge));
     };
 
-    std::vector<Peregrine::SmallGraph> patterns = {Peregrine::PatternGenerator::star(3)};
+    std::vector<Peregrine::SmallGraph> patterns = {Peregrine::PatternGenerator::star(2)};
     patterns.front().set_labelling(Peregrine::Graph::DISCOVER_LABELS);
-    auto psupps = Peregrine::match<Peregrine::Pattern, DiscoveryDomain, Peregrine::AT_THE_END, Peregrine::UNSTOPPABLE>(data_graph_name, patterns, nthreads, process, view);
+    auto psupps = Peregrine::match<Peregrine::Pattern, DiscoveryDomain<1>, Peregrine::AT_THE_END, Peregrine::UNSTOPPABLE>(data_graph_name, patterns, nthreads, process, view);
     for (const auto &[p, supp] : psupps)
     {
       if (supp >= threshold)
@@ -55,7 +55,7 @@ int main(int argc, char *argv[])
     a.map(cm.pattern, cm.mapping);
   };
 
-  uint32_t step = 2;
+  uint32_t step = 1;
   while (step < k && !patterns.empty())
   {
     freq_patterns.clear();

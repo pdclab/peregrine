@@ -27,9 +27,9 @@ namespace Peregrine
 
   SmallGraph PatternGenerator::star(uint32_t size)
   {
-    if (size < 3)
+    if (size < 2)
     {
-      std::cerr << "Please pass in size > 2, we don't do pattern-matching on single edges/vertices" << std::endl;
+      throw std::invalid_argument("Cannot generate a star on one vertex");
     }
 
     std::vector<std::pair<uint32_t, uint32_t>> edge_list;
@@ -198,6 +198,7 @@ namespace Peregrine
         {
           auto &rp = result[i];
 
+          // add anti-edges back
           for (const auto &[u, nbrs] : p.anti_adj_list)
           {
             for (uint32_t v : nbrs)
@@ -212,10 +213,12 @@ namespace Peregrine
               {
                 // should be maintaining all anti-edges: delete this pattern
                 to_delete.push_back(result.begin() + i);
+                break;
               }
             }
           }
 
+          // add anti-vertices back
           uint32_t new_av = rp.num_vertices() + 1;
           for (uint32_t av : anti_vertices)
           {
@@ -368,6 +371,7 @@ namespace Peregrine
         {
           auto &rp = result[i];
 
+          // add anti-edges back
           for (const auto &[u, nbrs] : p.anti_adj_list)
           {
             for (uint32_t v : nbrs)
@@ -382,10 +386,12 @@ namespace Peregrine
               {
                 // should be maintaining all anti-edges: delete this pattern
                 to_delete.push_back(result.begin() + i);
+                break;
               }
             }
           }
 
+          // add anti-vertices back
           uint32_t new_av = rp.num_vertices() + 1;
           for (uint32_t av : anti_vertices)
           {
@@ -427,11 +433,21 @@ namespace Peregrine
   {
     if (size > 9)
     {
-      std::cerr << "Currently don't support generating all patterns of size greater than 9" << std::endl;
+      throw std::invalid_argument("Generating all patterns of size greater than 9 has not been implemented");
+    }
+    else if (vertex_based && size == 1)
+    {
+      throw std::invalid_argument("Generating patterns consisting of a single vertex has not been implemented");
     }
 
     std::vector<SmallGraph> result;
-    if (vertex_based)
+    if ((vertex_based && size == 2) || size == 1)
+    {
+      SmallGraph p;
+      p.add_edge(1, 2);
+      result.emplace_back(std::move(p));
+    }
+    else if (vertex_based)
     {
       const auto &elists = get_elists(size);
       for (const auto &el : elists)

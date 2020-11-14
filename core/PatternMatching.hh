@@ -1198,38 +1198,67 @@ namespace Peregrine
 
     void discover_labels(partial_match<Graph::DISCOVER_LABELS> &m)
     {
-      // XXX: 3-star only
-      uint32_t centre = rbi.vmap[0][1][0] - 1;
-      uint32_t left = (centre + 1) % 3;
-      uint32_t right = (centre + 2) % 3;
-      const adjlist &cands = gpb->get_adj(m.mapping[centre]);
-
-      for (uint32_t i = 0; i < cands.length; ++i)
+      if (m.mapping.size() == 2)
       {
-        uint32_t u = cands.ptr[i];
-        uint32_t ulab = gpb->label(u);
-        for (uint32_t j = i + 1; j < cands.length; ++j)
+        uint32_t qu = rbi.vmap[0][1][0];
+        uint32_t u = m.mapping[qu-1];
+        uint32_t ulab = m.labels[qu-1];
+        const adjlist &cands = gpb->get_adj(u);
+        uint32_t *end = cands.ptr + cands.length;
+        uint32_t *start = std::lower_bound(cands.ptr, end, u);
+
+        for (uint32_t *v = start; v < end; ++v)
         {
-          uint32_t v = cands.ptr[j];
-          uint32_t vlab = gpb->label(v);
+          uint32_t vlab = gpb->label(*v);
+
           if (ulab <= vlab)
           {
-            m.mapping[left] = u;
-            m.labels[left] = ulab;
-
-            m.mapping[right] = v;
-            m.labels[right] = vlab;
+            m.map(1, u, ulab);
+            m.map(2, *v, vlab);
           }
           else
           {
-            m.mapping[left] = v;
-            m.labels[left] = vlab;
-
-            m.mapping[right] = u;
-            m.labels[right] = ulab;
+            m.map(2, u, ulab);
+            m.map(1, *v, vlab);
           }
 
           user_process({m.mapping, m.labels});
+        }
+      }
+      else if (m.mapping.size() == 3)
+      {
+        uint32_t centre = rbi.vmap[0][1][0] - 1;
+        uint32_t left = (centre + 1) % 3;
+        uint32_t right = (centre + 2) % 3;
+        const adjlist &cands = gpb->get_adj(m.mapping[centre]);
+
+        for (uint32_t i = 0; i < cands.length; ++i)
+        {
+          uint32_t u = cands.ptr[i];
+          uint32_t ulab = gpb->label(u);
+          for (uint32_t j = i + 1; j < cands.length; ++j)
+          {
+            uint32_t v = cands.ptr[j];
+            uint32_t vlab = gpb->label(v);
+            if (ulab <= vlab)
+            {
+              m.mapping[left] = u;
+              m.labels[left] = ulab;
+
+              m.mapping[right] = v;
+              m.labels[right] = vlab;
+            }
+            else
+            {
+              m.mapping[left] = v;
+              m.labels[left] = vlab;
+
+              m.mapping[right] = u;
+              m.labels[right] = ulab;
+            }
+
+            user_process({m.mapping, m.labels});
+          }
         }
       }
     }

@@ -43,6 +43,10 @@ namespace Peregrine
       {
         labels[u+1] = p.labels[u];
       }
+
+      uint32_t min_label = *std::min_element(p.labels.cbegin(), p.labels.cend());
+      uint32_t max_label = *std::max_element(p.labels.cbegin(), p.labels.cend());
+      label_range = std::make_pair(min_label, max_label);
     }
 
 
@@ -92,7 +96,7 @@ namespace Peregrine
     std::ifstream labels_file((data_graph_path + "/labels.bin").c_str(), std::ios::binary);
     if (labels_file)
     {
-      uint32_t min_label = 0;
+      uint32_t min_label = UINT_MAX;
       uint32_t max_label = 0;
       labelled_graph = true;
 

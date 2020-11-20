@@ -88,8 +88,6 @@ namespace Peregrine
     typename HandleType>
   inline void match_loop(DataGraph *dg, const Func &process, std::vector<std::vector<uint32_t>> &cands, HandleType &a)
   {
-    (void)a;
-
     uint32_t vgs_count = dg->get_vgs_count();
     uint32_t num_vertices = dg->get_vertex_count();
     uint64_t num_tasks = num_vertices * vgs_count;
@@ -423,9 +421,29 @@ namespace Peregrine
       }
     };
 
+    if constexpr (std::is_same_v<std::decay_t<DataGraphT>, DataGraph>)
+    {
+      Context::data_graph = &data_graph;
+    }
+    else if constexpr (std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+    {
+      Context::data_graph = data_graph;
+    }
+    else
+    {
+      Context::data_graph = new DataGraph(data_graph);
+      utils::Log{} << "Finished reading datagraph: |V| = " << Context::data_graph->get_vertex_count()
+                << " |E| = " << Context::data_graph->get_edge_count()
+                << "\n";
+    }
+
+    std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>> result;
+
     // optimize AggKeyT == Pattern
     if constexpr (std::is_same_v<AggKeyT, Pattern>)
     {
+      Context::data_graph->set_known_labels(patterns);
+
       std::vector<SmallGraph> single;
       std::vector<SmallGraph> vector;
       std::vector<SmallGraph> multi;
@@ -457,9 +475,9 @@ namespace Peregrine
           << "\n";
       }
 
-      auto result = match_single<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, data_graph, single);
-      auto vector_result = match_vector<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, data_graph, vector);
-      auto multi_result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable>(process, view, nworkers, data_graph, multi);
+      result = match_single<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, single);
+      auto vector_result = match_vector<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, vector);
+      auto multi_result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable>(process, view, nworkers, multi);
 
       result.insert(result.end(), vector_result.begin(), vector_result.end());
       result.insert(result.end(), multi_result.begin(), multi_result.end());
@@ -468,14 +486,21 @@ namespace Peregrine
     }
     else
     {
-      return match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable>(process, view, nworkers, data_graph, patterns);
+      result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable>(process, view, nworkers, patterns);
     }
+
+    if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+    {
+      delete Context::data_graph;
+    }
+
+    return result;
   }
 
-  template <typename AggKeyT, typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename DataGraphT, typename PF, typename VF>
+  template <typename AggKeyT, typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename PF, typename VF>
   std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>>
   match_multi
-  (PF &&process, VF &&viewer, size_t nworkers, DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns)
+  (PF &&process, VF &&viewer, size_t nworkers, const std::vector<SmallGraph> &patterns)
   {
     std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>> results;
 
@@ -484,16 +509,10 @@ namespace Peregrine
     // initialize
     Barrier barrier(nworkers);
     std::vector<std::thread> pool;
-    DataGraph dg(std::move(data_graph));
-    dg.set_rbi(patterns.front());
+    DataGraph *dg(Context::data_graph);
+    dg->set_rbi(patterns.front());
 
-    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
-              << " |E| = " << dg.get_edge_count()
-              << "\n";
-
-    dg.set_known_labels(patterns);
-    Context::data_graph = &dg;
-    Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
+    Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
 
     MapAggregator<AggKeyT, AggValueT, OnTheFly, Stoppable, decltype(viewer)> aggregator(nworkers, viewer);
 
@@ -509,7 +528,7 @@ namespace Peregrine
             PF
           >,
           i,
-          &dg,
+          dg,
           std::ref(barrier),
           std::ref(aggregator),
           std::ref(process));
@@ -531,8 +550,8 @@ namespace Peregrine
       Context::task_ctr = 0;
 
       // set new pattern
-      dg.set_rbi(p);
-      Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
+      dg->set_rbi(p);
+      Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
       // prepare handles for the next pattern
       aggregator.reset();
 
@@ -575,7 +594,7 @@ namespace Peregrine
                   PF
                 >,
                 i,
-                &dg,
+                dg,
                 std::ref(barrier),
                 std::ref(aggregator),
                 std::ref(process));
@@ -609,10 +628,10 @@ namespace Peregrine
     return results;
   }
 
-  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename DataGraphT, typename PF, typename VF>
+  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename PF, typename VF>
   std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>>
   match_single
-  (PF &&process, VF &&viewer, size_t nworkers, DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns)
+  (PF &&process, VF &&viewer, size_t nworkers, const std::vector<SmallGraph> &patterns)
   {
     std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>> results;
 
@@ -621,16 +640,10 @@ namespace Peregrine
     // initialize
     Barrier barrier(nworkers);
     std::vector<std::thread> pool;
-    DataGraph dg(std::move(data_graph));
-    dg.set_rbi(patterns.front());
+    DataGraph *dg(Context::data_graph);
+    dg->set_rbi(patterns.front());
 
-    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
-              << " |E| = " << dg.get_edge_count()
-              << "\n";
-
-    dg.set_known_labels(patterns);
-    Context::data_graph = &dg;
-    Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
+    Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
 
     SVAggregator<AggValueT, OnTheFly, Stoppable, decltype(viewer)> aggregator(nworkers, viewer);
 
@@ -644,7 +657,7 @@ namespace Peregrine
             PF
           >,
           i,
-          &dg,
+          dg,
           std::ref(barrier),
           std::ref(aggregator),
           std::ref(process));
@@ -666,8 +679,8 @@ namespace Peregrine
       Context::task_ctr = 0;
 
       // set new pattern
-      dg.set_rbi(p);
-      Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
+      dg->set_rbi(p);
+      Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
       // prepare handles for the next pattern
       aggregator.reset();
 
@@ -711,7 +724,7 @@ namespace Peregrine
                   PF
                 >,
                 i,
-                &dg,
+                dg,
                 std::ref(barrier),
                 std::ref(aggregator),
                 std::ref(process));
@@ -740,10 +753,10 @@ namespace Peregrine
     return results;
   }
 
-  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename DataGraphT, typename PF, typename VF>
+  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename PF, typename VF>
   std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>>
   match_vector
-  (PF &&process, VF &&viewer, size_t nworkers, DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns)
+  (PF &&process, VF &&viewer, size_t nworkers, const std::vector<SmallGraph> &patterns)
   {
     std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>> results;
 
@@ -752,16 +765,10 @@ namespace Peregrine
     // initialize
     Barrier barrier(nworkers);
     std::vector<std::thread> pool;
-    DataGraph dg(std::move(data_graph));
-    dg.set_rbi(patterns.front());
+    DataGraph *dg(Context::data_graph);
+    dg->set_rbi(patterns.front());
 
-    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
-              << " |E| = " << dg.get_edge_count()
-              << "\n";
-
-    dg.set_known_labels(patterns);
-    Context::data_graph = &dg;
-    Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
+    Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
 
     VecAggregator<AggValueT, OnTheFly, Stoppable, decltype(viewer)> aggregator(nworkers, viewer);
 
@@ -776,7 +783,7 @@ namespace Peregrine
             PF
           >,
           i,
-          &dg,
+          dg,
           std::ref(barrier),
           std::ref(aggregator),
           std::ref(process));
@@ -798,8 +805,8 @@ namespace Peregrine
       Context::task_ctr = 0;
 
       // set new pattern
-      dg.set_rbi(p);
-      Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg.rbi));
+      dg->set_rbi(p);
+      Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
       // prepare handles for the next pattern
       aggregator.reset();
 
@@ -841,7 +848,7 @@ namespace Peregrine
                   PF
                 >,
                 i,
-                &dg,
+                dg,
                 std::ref(barrier),
                 std::ref(aggregator),
                 std::ref(process));
@@ -852,7 +859,7 @@ namespace Peregrine
       }
 
       std::vector<uint32_t> ls(p.get_labels().cbegin(), p.get_labels().cend());
-      uint32_t pl = dg.new_label;
+      uint32_t pl = dg->new_label;
       uint32_t l = 0;
       for (auto &m : aggregator.latest_result)
       {

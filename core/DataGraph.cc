@@ -10,13 +10,15 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <filesystem>
+
 #include "utils.hh"
 #include "Graph.hh"
 #include "DataGraph.hh"
 
 namespace Peregrine
 {
-  DataGraph::DataGraph(const SmallGraph &pp)
+  void DataGraph::from_smallgraph(const SmallGraph &pp)
   {
     SmallGraph p(pp);
     graph_in_memory = std::make_unique<uint32_t[]>(2 * p.num_true_edges());
@@ -54,75 +56,99 @@ namespace Peregrine
     std::iota(&ids[0], &ids[vertex_count+1], 0);
   }
 
-  DataGraph::DataGraph(std::string data_graph_path)
+  DataGraph::DataGraph(const SmallGraph &p)
   {
-    struct stat st;
-    std::string data_path(data_graph_path + "/data.bin");
-    if (stat(data_path.c_str(), &st) != 0)
+    from_smallgraph(p);
+  }
+
+  DataGraph::DataGraph(const std::string &path_str)
+  {
+    std::filesystem::path data_graph_path(path_str);
+    if (std::filesystem::is_directory(data_graph_path))
+    {
+      std::filesystem::path data_path(data_graph_path / "data.bin");
+      if (!std::filesystem::exists(data_path))
+      {
+        std::cerr << "ERROR: Data graph could not be opened." << std::endl;
+        exit(1);
+      }
+
+      std::ifstream input_graph(data_path, std::ios::binary);
+      input_graph.read(reinterpret_cast<char *>(&vertex_count), sizeof(vertex_count));
+      input_graph.read(reinterpret_cast<char *>(&edge_count), sizeof(edge_count));
+
+      // don't count the header (two 32-bit integers)
+      uint64_t file_size = std::filesystem::file_size(data_path);
+      assert(file_size % 4 == 0);
+      uint64_t data_count = file_size / 4;
+      graph_in_memory = std::make_unique<uint32_t[]>(data_count - 2);
+
+      uint64_t curr_read_offset = 0;
+      uint64_t read_batch_size = 2147479552;
+      while (curr_read_offset/4 <= data_count - 2)
+      {
+        input_graph.read(reinterpret_cast<char *>(graph_in_memory.get() + curr_read_offset/4), std::min(read_batch_size, (data_count-2)*4-curr_read_offset));
+        curr_read_offset += read_batch_size;
+      }
+
+      data_graph = std::make_unique<adjlist[]>(vertex_count);
+
+      uint32_t cursor = 0;
+      for (uint32_t i = 0; i < vertex_count; i++)
+      {
+        data_graph[i].length = graph_in_memory[cursor];
+        data_graph[i].ptr = &graph_in_memory[++cursor];
+        cursor += data_graph[i].length;
+      }
+
+      labels = std::make_unique<uint32_t[]>(vertex_count+1);
+      std::ifstream labels_file(data_graph_path / "labels.bin", std::ios::binary);
+      if (labels_file)
+      {
+        uint32_t min_label = UINT_MAX;
+        uint32_t max_label = 0;
+        labelled_graph = true;
+
+        for (uint32_t i = 0; i < vertex_count; ++i)
+        {
+          uint32_t buf[2];
+          labels_file.read(reinterpret_cast<char *>(buf), 2*sizeof(uint32_t));
+
+          uint32_t v = buf[0];
+          uint32_t label = buf[1];
+          min_label = std::min(min_label, label);
+          max_label = std::max(max_label, label);
+          labels[v] = label;
+        }
+
+        label_range = {min_label, max_label};
+      }
+
+      {
+        std::ifstream ids_file(data_graph_path / "ids.bin", std::ios::binary);
+
+        if (!ids_file)
+        {
+          std::cerr << "WARNING: Could not open ID file for data graph." << std::endl;
+        }
+        else
+        {
+          ids = std::make_unique<uint32_t[]>(vertex_count+1);
+          for (uint32_t i = 1; i <= vertex_count; ++i)
+          {
+            ids_file.read(reinterpret_cast<char *>(&ids[i]), sizeof(uint32_t));
+          }
+        }
+      }
+    }
+    else if (std::filesystem::is_regular_file(data_graph_path))
+    {
+      from_smallgraph(path_str);
+    }
+    else
     {
       std::cerr << "ERROR: Data graph could not be opened." << std::endl;
       exit(1);
-    }
-
-
-    std::ifstream input_graph(data_path.c_str(), std::ios::binary);
-    input_graph.read(reinterpret_cast<char *>(&vertex_count), sizeof(vertex_count));
-    input_graph.read(reinterpret_cast<char *>(&edge_count), sizeof(edge_count));
-
-    // don't count the header (two 32-bit integers)
-    assert(st.st_size % 4 == 0);
-    uint64_t data_count = st.st_size / 4;
-    graph_in_memory = std::make_unique<uint32_t[]>(data_count - 2);
-
-    uint64_t curr_read_offset = 0;
-    uint64_t read_batch_size = 2147479552;
-    while (curr_read_offset/4 <= data_count - 2)
-    {
-      input_graph.read(reinterpret_cast<char *>(graph_in_memory.get() + curr_read_offset/4), std::min(read_batch_size, (data_count-2)*4-curr_read_offset));
-      curr_read_offset += read_batch_size;
-    }
-
-    data_graph = std::make_unique<adjlist[]>(vertex_count);
-
-    uint32_t cursor = 0;
-    for (uint32_t i = 0; i < vertex_count; i++)
-    {
-      data_graph[i].length = graph_in_memory[cursor];
-      data_graph[i].ptr = &graph_in_memory[++cursor];
-      cursor += data_graph[i].length;
-    }
-
-    labels = std::make_unique<uint32_t[]>(vertex_count+1);
-    std::ifstream labels_file((data_graph_path + "/labels.bin").c_str(), std::ios::binary);
-    if (labels_file)
-    {
-      uint32_t min_label = UINT_MAX;
-      uint32_t max_label = 0;
-      labelled_graph = true;
-
-      for (uint32_t i = 0; i < vertex_count; ++i)
-      {
-        uint32_t buf[2];
-        labels_file.read(reinterpret_cast<char *>(buf), 2*sizeof(uint32_t));
-
-        uint32_t v = buf[0];
-        uint32_t label = buf[1];
-        min_label = std::min(min_label, label);
-        max_label = std::max(max_label, label);
-        labels[v] = label;
-      }
-
-      label_range = {min_label, max_label};
-    }
-
-    {
-      std::ifstream ids_file((data_graph_path + "/ids.bin").c_str(), std::ios::binary);
-      assert(ids_file);
-      ids = std::make_unique<uint32_t[]>(vertex_count+1);
-      for (uint32_t i = 1; i <= vertex_count; ++i)
-      {
-        ids_file.read(reinterpret_cast<char *>(&ids[i]), sizeof(uint32_t));
-      }
     }
   }
 

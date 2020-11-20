@@ -26,7 +26,7 @@ namespace Peregrine
   class DataGraph
   {
    public:
-    DataGraph(std::string data_graph_path);
+    DataGraph(const std::string &data_graph_path);
     DataGraph(const SmallGraph &p);
     DataGraph(DataGraph &&other);
     DataGraph(DataGraph &) = delete;
@@ -54,6 +54,8 @@ namespace Peregrine
     AnalyzedPattern rbi;
     uint32_t new_label;
    private:
+    void from_smallgraph(const SmallGraph &p);
+
     uint32_t vertex_count;
     uint64_t edge_count;
     unsigned forest_count;

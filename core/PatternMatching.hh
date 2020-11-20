@@ -632,6 +632,24 @@ namespace Peregrine
                 candidates.end(),
                 [this, &l](uint32_t dv) { return gpb->label(dv) != l; });
           }
+          else if constexpr (L == Graph::PARTIALLY_LABELLED)
+          {
+            uint32_t l = p.label(qv);
+            if (l == static_cast<uint32_t>(-1))
+            {
+              end = std::remove_if(std::execution::unseq,
+                  candidates.begin(),
+                  candidates.end(),
+                  [this, &l](uint32_t dv) { return gpb->known_label(gpb->label(dv)); });
+            }
+            else
+            {
+              end = std::remove_if(std::execution::unseq,
+                  candidates.begin(),
+                  candidates.end(),
+                  [this, &l](uint32_t dv) { return gpb->label(dv) != l; });
+            }
+          }
 
           auto range_start = start;
           auto range_end = end;
@@ -1656,23 +1674,47 @@ namespace Peregrine
 
           if constexpr (HAV)
           {
-            if constexpr (L == Graph::LABELLED)
+            if constexpr (L == Graph::LABELLED || L == Graph::PARTIALLY_LABELLED)
             {
               uint32_t qv = unmatched.front();
               uint32_t label = p.label(qv);
-              auto counter = [this, qv, label, &m](uint32_t dv)
+
+              uint64_t n;
+
+              if (label == static_cast<uint32_t>(-1))
               {
-                if (gpb->label(dv) == label && !m.data_mapped(dv))
+                auto counter = [this, qv, &m](uint32_t dv)
                 {
-                  m.map(qv, dv);
-                  return check_anti_vertices(m);
-                }
-                return false;
-              };
-              return std::count_if(std::execution::unseq,
+                  if (!gpb->known_label(gpb->label(dv)) && !m.data_mapped(dv))
+                  {
+                    m.map(qv, dv);
+                    return check_anti_vertices(m);
+                  }
+                  return false;
+                };
+                n = std::count_if(std::execution::unseq,
+                    candidates.cbegin(),
+                    candidates.cend(),
+                    counter);
+              }
+              else
+              {
+                auto counter = [this, qv, label, &m](uint32_t dv)
+                {
+                  if (gpb->label(dv) == label && !m.data_mapped(dv))
+                  {
+                    m.map(qv, dv);
+                    return check_anti_vertices(m);
+                  }
+                  return false;
+                };
+                n = std::count_if(std::execution::unseq,
                   candidates.cbegin(),
                   candidates.cend(),
                   counter);
+              }
+
+              return n;
             }
             else if constexpr (L == Graph::UNLABELLED)
             {
@@ -1693,7 +1735,7 @@ namespace Peregrine
             }
             else
             {
-              assert(false); // count is only for labelled/unlabelled
+              assert(false); // count is not for DISCOVER_LABELS
             }
           }
           else if constexpr (L == Graph::UNLABELLED)
@@ -1707,27 +1749,40 @@ namespace Peregrine
 
             return n;
           }
-          else if constexpr (L == Graph::LABELLED)
+          else if constexpr (L == Graph::LABELLED || L == Graph::PARTIALLY_LABELLED)
           {
             uint32_t label = p.label(unmatched.front());
-            uint64_t n = std::count_if(std::execution::unseq,
+
+            uint64_t n;
+
+            if (label != static_cast<uint32_t>(-1))
+            {
+              n = std::count_if(std::execution::unseq,
                 candidates.cbegin(),
                 candidates.cend(),
-                [this, &label](uint32_t dv) { return gpb->label(dv) == label; });
+                [this, label](uint32_t dv) { return gpb->label(dv) == label; });
 
-            for (uint32_t dv : m.mapping)
+              for (uint32_t dv : m.mapping)
+              {
+                if (gpb->label(dv) != label) continue; // don't look for irrelevant labels
+
+                n -= std::binary_search(candidates.cbegin(), candidates.cend(), dv)
+                  ? 1 : 0;
+              }
+            }
+            else // guaranteed to not have conflicting labels, so no need to check
             {
-              if (gpb->label(dv) != label) continue; // don't look for irrelevant labels
-
-              n -= std::binary_search(candidates.cbegin(), candidates.cend(), dv)
-                ? 1 : 0;
+              n = std::count_if(std::execution::unseq,
+                candidates.cbegin(),
+                candidates.cend(),
+                [this, label](uint32_t dv) { return !gpb->known_label(gpb->label(dv)); });
             }
 
             return n;
           }
           else
           {
-            assert(false); // count is only for labelled/unlabelled
+            assert(false); // count is not for DISCOVER_LABELS
           }
         }
         else if (ordgs.size() == 1 && !HAV)
@@ -1983,7 +2038,7 @@ namespace Peregrine
 
       if constexpr (L == Graph::DISCOVER_LABELS)
       {
-        assert(false);
+        assert(false); // count is not for DISCOVER_LABELS
         return 0;
       }
       else

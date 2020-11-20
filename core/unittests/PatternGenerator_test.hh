@@ -159,7 +159,7 @@ SUITE(PatternGeneratorTests)
     }
   }
 
-  TEST(AntiVertices)
+  TEST(AntiVerticesEdgeBased)
   {
     auto s1 = PatternGenerator::star(3);
     s1.add_anti_edge(1, 4);
@@ -189,37 +189,7 @@ SUITE(PatternGeneratorTests)
       }
     }
 
-    auto res3 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED,
-        PatternGenerator::MAINTAIN_ANTI_EDGES);
-
-    auto res4 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED,
-        PatternGenerator::OVERWRITE_ANTI_EDGES);
-
-    CHECK(res3 == res4);
-    for (const auto &p : res3)
-    {
-      CHECK(p.get_anti_neighbours(1) == std::vector<uint32_t>{5});
-      // 1 is still the centre
-      CHECK((p.get_neighbours(1).size() > 2) || (p.get_neighbours(1) == std::vector<uint32_t>{2, 3}));
-      CHECK(p.get_anti_neighbours(5) == std::vector<uint32_t>{1});
-      CHECK(p.get_anti_neighbours(4).empty());
-      CHECK(!p.get_neighbours(4).empty());
-      CHECK(p.num_vertices() < 5);
-    }
-
-
     s1.add_anti_edge(2, 4);
-    auto res5 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED);
-    for (const auto &p : res5)
-    {
-      CHECK((p.get_anti_neighbours(5) == std::vector<uint32_t>{1, 2}));
-      CHECK(p.get_anti_neighbours(1) == std::vector<uint32_t>{5});
-      CHECK(p.get_anti_neighbours(2) == std::vector<uint32_t>{5});
-      CHECK(p.get_anti_neighbours(4).empty());
-      CHECK(!p.get_neighbours(4).empty());
-      CHECK(p.num_vertices() < 5);
-    }
-
     auto res6 = PatternGenerator::extend({s1}, PatternGenerator::EDGE_BASED);
     for (const auto &p : res6)
     {
@@ -242,7 +212,58 @@ SUITE(PatternGeneratorTests)
     }
   }
 
-  TEST(AntiEdges)
+  TEST(AntiVerticesVertBased)
+  {
+    auto s1 = PatternGenerator::star(3);
+    s1.add_anti_edge(1, 4);
+
+    auto res3 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED,
+        PatternGenerator::MAINTAIN_ANTI_EDGES);
+
+    auto res4 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED,
+        PatternGenerator::OVERWRITE_ANTI_EDGES);
+
+    // equal true edges, but overwrite should add an anti-edge between 2,3 in res4
+    CHECK(res3 == res4);
+    for (const auto &p : res3)
+    {
+      CHECK(p.get_anti_neighbours(1) == std::vector<uint32_t>{5});
+      // 1 is still the centre
+      CHECK((p.get_neighbours(1).size() > 2) || (p.get_neighbours(1) == std::vector<uint32_t>{2, 3}));
+      CHECK(p.get_anti_neighbours(5) == std::vector<uint32_t>{1});
+      CHECK(p.get_anti_neighbours(4).empty());
+      CHECK(!p.get_neighbours(4).empty());
+      CHECK(p.num_vertices() < 5);
+    }
+
+    s1.add_anti_edge(2, 4);
+    auto res5 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED, PatternGenerator::MAINTAIN_ANTI_EDGES);
+    for (const auto &p : res5)
+    {
+      CHECK((p.get_anti_neighbours(5) == std::vector<uint32_t>{1, 2}));
+      CHECK(p.get_anti_neighbours(1) == std::vector<uint32_t>{5});
+      CHECK(p.get_anti_neighbours(2) == std::vector<uint32_t>{5});
+      CHECK(p.get_anti_neighbours(4).empty());
+      CHECK(!p.get_neighbours(4).empty());
+      CHECK(p.num_vertices() == 4);
+    }
+
+    auto res6 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED, PatternGenerator::OVERWRITE_ANTI_EDGES);
+    for (const auto &p : res6)
+    {
+      CHECK((p.get_anti_neighbours(5) == std::vector<uint32_t>{1, 2}));
+      CHECK(p.get_anti_neighbours(1).size() >= 1);
+      CHECK(utils::search(p.get_anti_neighbours(1), 5u));
+      CHECK(p.get_anti_neighbours(2).size() > 1);
+      CHECK(utils::search(p.get_anti_neighbours(2), 5u));
+      CHECK(p.get_anti_neighbours(4).size() < 4);
+      CHECK(!utils::search(p.get_anti_neighbours(4), 5u));
+      CHECK(!p.get_neighbours(4).empty());
+      CHECK(p.num_vertices() == 4);
+    }
+  }
+
+  TEST(AntiEdgesVertBased)
   {
     auto s1 = PatternGenerator::star(3);
     s1.add_anti_edge(2, 3);
@@ -252,15 +273,27 @@ SUITE(PatternGeneratorTests)
 
     auto res2 = PatternGenerator::extend({s1}, PatternGenerator::VERTEX_BASED,
         PatternGenerator::MAINTAIN_ANTI_EDGES);
+
+    auto is_vinduced = [](const SmallGraph &p) {
+        uint32_t m = p.num_anti_edges() + p.num_true_edges();
+        uint32_t n = p.num_vertices();
+        return m == (n*(n-1))/2;
+      };
     
-    // vertex extension doesn't add edges between existing vertices, so there
-    // should be no difference between overwriting/maintaining
+    // vertex extension doesn't add edges between existing vertices and s1 is
+    // vinduced, so there should be no difference between
+    // overwriting/maintaining
     CHECK(res1 == res2);
     for (const auto &p : res1)
     {
-      CHECK(p.get_anti_neighbours(2) == std::vector<uint32_t>{3});
-      CHECK(p.get_anti_neighbours(3) == std::vector<uint32_t>{2});
+      CHECK(is_vinduced(p));
     }
+  }
+
+  TEST(AntiEdgesEdgeBased)
+  {
+    auto s1 = PatternGenerator::star(3);
+    s1.add_anti_edge(2, 3);
 
     auto res3 = PatternGenerator::extend({s1}, PatternGenerator::EDGE_BASED,
         PatternGenerator::OVERWRITE_ANTI_EDGES);

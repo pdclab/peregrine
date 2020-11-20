@@ -93,15 +93,7 @@ namespace Peregrine
     {
       for (const auto &p : from)
       {
-
-        // indsets do not guarantee uniqueness in the result set!
-        // consider an unlabelled 4chain:
-        // the partial order on the centre points means there is no order on the
-        // end points, hence they are in different indsets. However, the end
-        // points are also symmetric.
-        // Have to merge indsets which have symmetric parents maybe?
         const AnalyzedPattern rbi(p);
-        const auto &indsets = rbi.indsets;
 
         uint32_t start_idx = result.size();
 
@@ -109,87 +101,121 @@ namespace Peregrine
 
         const auto &adj = p.true_adj_list;
 
-        std::vector<uint32_t> perms(indsets.size() - 1, 0);
-        uint32_t idx = indsets.size()-1; // begin at the end
-        while (true)
+        // one autset, so one extension per existing vertex
+        if (rbi.nautsets == 1)
         {
-          if (idx == indsets.size() - 1)
+          auto new_adj(adj);
+          for (uint32_t i = 0; i < p.num_vertices(); ++i)
           {
-            // generate all the extensions
-
-            auto new_adj(adj);
-
-            for (uint32_t k = 0; k < perms.size(); ++k)
+            new_adj[new_v].push_back(i+1);
+            new_adj[i+1].push_back(new_v);
+            if (p.labelling == Graph::LABELLED)
             {
-              // add an edge from new_v to the first perms[k] elements in kth indset
-              for (uint32_t j = 0; j < perms[k]; ++j)
+              for (uint32_t label : label_set)
               {
-                new_adj[new_v].push_back(indsets[k][j]);
-                new_adj[indsets[k][j]].push_back(new_v);
+                std::vector<uint32_t> labels(p.labels);
+                labels.push_back(label);
+                result.emplace_back(new_adj, labels);
               }
             }
-
-            // if an edge has been added from another indset, then make an
-            // extension with no edge from the last indset
-            if (std::any_of(perms.begin(), perms.end(), [](uint32_t n) { return n != 0; }))
+            else
             {
-              if (p.labelling == Graph::LABELLED)
+              result.emplace_back(new_adj);
+            }
+          }
+
+        }
+        else
+        {
+          std::vector<std::vector<uint32_t>> autsets(rbi.nautsets);
+          for (uint32_t v = 1; v <= p.num_vertices(); ++v)
+          {
+            uint32_t autset = rbi.aut_map[v-1];
+            autsets[autset].push_back(v);
+          }
+
+          // draw an edge from each autset to each other autset
+          std::vector<uint32_t> perms(autsets.size() - 1, 0);
+          uint32_t idx = autsets.size()-1; // begin at the end
+          while (true)
+          {
+            if (idx == autsets.size() - 1)
+            {
+              // generate all the extensions
+
+              auto new_adj(adj);
+
+              for (uint32_t k = 0; k < perms.size(); ++k)
               {
-                for (uint32_t label : label_set)
+                // add an edge from new_v to the first perms[k] elements in kth indset
+                for (uint32_t j = 0; j < perms[k]; ++j)
                 {
-                  std::vector<uint32_t> labels(p.labels);
-                  labels.push_back(label);
-                  result.emplace_back(new_adj, labels);
+                  new_adj[new_v].push_back(autsets[k][j]);
+                  new_adj[autsets[k][j]].push_back(new_v);
                 }
               }
-              else
-              {
-                result.emplace_back(new_adj);
-              }
-            }
 
-            // add an edge from new_v to the all elements in last indset,
-            // finishing an extension with each edge
-            for (uint32_t j = 0; j < indsets.back().size(); ++j)
-            {
-              new_adj[new_v].push_back(indsets.back()[j]);
-              new_adj[indsets.back()[j]].push_back(new_v);
-
-              // finished one extension
-              if (p.labelling == Graph::LABELLED)
+              // if an edge has been added from another indset, then make an
+              // extension with no edge from the last indset
+              if (std::any_of(perms.begin(), perms.end(), [](uint32_t n) { return n != 0; }))
               {
-                for (uint32_t label : label_set)
+                if (p.labelling == Graph::LABELLED)
                 {
-                  std::vector<uint32_t> labels(p.labels);
-                  labels.push_back(label);
-                  result.emplace_back(new_adj, labels);
+                  for (uint32_t label : label_set)
+                  {
+                    std::vector<uint32_t> labels(p.labels);
+                    labels.push_back(label);
+                    result.emplace_back(new_adj, labels);
+                  }
+                }
+                else
+                {
+                  result.emplace_back(new_adj);
                 }
               }
-              else
-              {
-                result.emplace_back(new_adj);
-              }
-            }
 
-            idx -= 1;
-            perms[idx] += 1;
-          }
-          else if (perms[idx] <= indsets[idx].size())
-          {
-            idx += 1;
-          }
-          else if (idx != 0)
-          {
-            perms[idx] = 0;
-            idx -= 1;
-            perms[idx] += 1;
-          }
-          else
-          {
-            break;
+              // add an edge from new_v to the all elements in last indset,
+              // finishing an extension with each edge
+              for (uint32_t j = 0; j < autsets.back().size(); ++j)
+              {
+                new_adj[new_v].push_back(autsets.back()[j]);
+                new_adj[autsets.back()[j]].push_back(new_v);
+
+                // finished one extension
+                if (p.labelling == Graph::LABELLED)
+                {
+                  for (uint32_t label : label_set)
+                  {
+                    std::vector<uint32_t> labels(p.labels);
+                    labels.push_back(label);
+                    result.emplace_back(new_adj, labels);
+                  }
+                }
+                else
+                {
+                  result.emplace_back(new_adj);
+                }
+              }
+
+              idx -= 1;
+              perms[idx] += 1;
+            }
+            else if (perms[idx] <= autsets[idx].size())
+            {
+              idx += 1;
+            }
+            else if (idx != 0)
+            {
+              perms[idx] = 0;
+              idx -= 1;
+              perms[idx] += 1;
+            }
+            else
+            {
+              break;
+            }
           }
         }
-
 
         // add anti-vertices and anti-edges back into all extensions of this pattern
         const auto &anti_vertices = rbi.anti_vertices;
@@ -199,21 +225,40 @@ namespace Peregrine
           auto &rp = result[i];
 
           // add anti-edges back
-          for (const auto &[u, nbrs] : p.anti_adj_list)
+          if (!overwrite_anti_edges)
           {
-            for (uint32_t v : nbrs)
+            for (const auto &[u, nbrs] : p.anti_adj_list)
             {
-              if (u > v || p.is_anti_vertex(u) || p.is_anti_vertex(v)) continue;
+              for (uint32_t v : nbrs)
+              {
+                if (u > v || p.is_anti_vertex(u) || p.is_anti_vertex(v)) continue;
 
-              if (!utils::search(rp.get_neighbours(u), v)) // hasn't been overwritten
-              {
-                rp.add_anti_edge(u, v);
+                if (!utils::search(rp.get_neighbours(u), v)) // hasn't been overwritten
+                {
+                  rp.add_anti_edge(u, v);
+                }
+                else
+                {
+                  // should be maintaining all anti-edges: delete this pattern
+                  to_delete.push_back(result.begin() + i);
+                  break;
+                }
               }
-              else if (!overwrite_anti_edges)
+            }
+          }
+          else
+          {
+            // this is vertex-based, so if we can overwrite, we will add
+            // anti-edges for each pair of disconnected vertices
+            for (uint32_t u = 1; u < new_v; ++u)
+            {
+              const auto &nbrs = rp.get_neighbours(u);
+              for (uint32_t v = u+1; v <= new_v; ++v)
               {
-                // should be maintaining all anti-edges: delete this pattern
-                to_delete.push_back(result.begin() + i);
-                break;
+                if (!utils::search(nbrs, v))
+                {
+                  rp.add_anti_edge(u, v);
+                }
               }
             }
           }

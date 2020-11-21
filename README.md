@@ -105,6 +105,12 @@ Frequent patterns:
 Finished in 0.078629s
 ```
 
+The sample FSM app performs edge-induced FSM by default. For vertex-induced FSM, simply call it as
+
+```
+$ bin/fsm data/citeseer 3 300 8 v # vertex-induced
+```
+
 The existence-query application simply states whether the desired pattern exists or not:
 
 ```
@@ -138,10 +144,10 @@ Given a file in the following edge-list format:
 <vertex-id> [label] <vertex-id> [label]
 ```
 
-where the `label`'s are optional 32-bit integers. To indicate a vertex is
-unlabelled in a partially-labelled pattern, assign it label `-1`. To indicate
-an anti-edge, any extra integer can be placed at the end of
-the line.
+where the `label`'s are optional 32-bit integers and vertex ids are contiguous
+integers starting from 1. To indicate a vertex is unlabelled in a
+partially-labelled pattern, assign it label `-1`. To indicate an anti-edge, any
+extra integer can be placed at the end of the line.
 
 For example, a triangle:
 

@@ -418,6 +418,9 @@ namespace Peregrine
 
           // make sure anti_adj_list.at() doesn't fail
           for (auto [v, _] : true_adj_list) anti_adj_list[v];
+
+          // make sure true_adj_list.at() doesn't fail
+          for (auto [v, _] : anti_adj_list) true_adj_list[v];
       }
 
       /**
@@ -1045,10 +1048,14 @@ namespace Peregrine
 
           for (const auto &[u, nbrs] : query_graph.true_adj_list)
           {
-            degs[u-1] = nbrs.size();
-            for (uint32_t v : nbrs)
+            // anti-vertices will still be in true_adj_list with empty lists
+            if (!nbrs.empty())
             {
-              nbr_degs[u-1].push_back(v);
+              degs[u-1] = nbrs.size();
+              for (uint32_t v : nbrs)
+              {
+                nbr_degs[u-1].push_back(v);
+              }
             }
           }
 

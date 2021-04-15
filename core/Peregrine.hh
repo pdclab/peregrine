@@ -921,6 +921,9 @@ namespace Peregrine
     auto is_same_size = [&sz](const SmallGraph &p) {
         return p.num_vertices() == sz && p.num_anti_vertices() == 0;
       };
+    auto is_unlabelled = [&sz](const SmallGraph &p) {
+        return p.get_labelling() == Graph::UNLABELLED;
+      };
     auto is_vinduced = [](const SmallGraph &p) {
         uint32_t m = p.num_anti_edges() + p.num_true_edges();
         uint32_t n = p.num_vertices();
@@ -942,6 +945,7 @@ namespace Peregrine
     bool must_convert_counts = false;
     std::vector<SmallGraph> new_patterns;
     if (std::all_of(patterns.cbegin(), patterns.cend(), is_same_size)
+        && std::all_of(patterns.cbegin(), patterns.cend(), is_unlabelled)
         && std::all_of(patterns.cbegin(), patterns.cend(), is_vinduced)
         && (sz < 10 && patterns.size() == num_possible_topologies[sz]))
     {
@@ -955,20 +959,32 @@ namespace Peregrine
 
     Barrier barrier(nworkers);
     std::vector<std::thread> pool;
-    DataGraph dg(data_graph);
-    dg.set_rbi(new_patterns.front());
 
-    utils::Log{} << "Finished reading datagraph: |V| = " << dg.get_vertex_count()
-              << " |E| = " << dg.get_edge_count()
-              << "\n";
+    DataGraph *dg;
+    if constexpr (std::is_same_v<std::decay_t<DataGraphT>, DataGraph>)
+    {
+      dg = &data_graph;
+    }
+    else if constexpr (std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+    {
+      dg = data_graph;
+    }
+    else
+    {
+      dg = new DataGraph(data_graph);
+      utils::Log{} << "Finished reading datagraph: |V| = " << dg->get_vertex_count()
+                << " |E| = " << dg->get_edge_count()
+                << "\n";
+    }
 
-    dg.set_known_labels(new_patterns);
+    dg->set_rbi(new_patterns.front());
+    dg->set_known_labels(new_patterns);
 
     for (uint8_t i = 0; i < nworkers; ++i)
     {
       pool.emplace_back(count_worker,
           i,
-          &dg,
+          dg,
           std::ref(barrier));
     }
 
@@ -983,7 +999,7 @@ namespace Peregrine
       Context::gcount = 0;
 
       // set new pattern
-      dg.set_rbi(p);
+      dg->set_rbi(p);
 
       // begin matching
       barrier.release();
@@ -1006,6 +1022,11 @@ namespace Peregrine
     if (must_convert_counts)
     {
       results = convert_counts(results, patterns);
+    }
+
+    if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
+    {
+      delete dg;
     }
 
     utils::Log{} << "-------" << "\n";

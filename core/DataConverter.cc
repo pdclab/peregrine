@@ -47,7 +47,26 @@ namespace Peregrine
      */
     void calculate_degree_map(unsigned thread_id, const char *graph, size_t file_size, size_t task_size, uint64_t &num_edges, std::vector<uint32_t> &degree_maps, uint32_t &max_vid)
     {
-      std::vector<uint32_t> degree_map(100'000'000);
+      // estimate number of vertices based on file_size
+      uint32_t vertex_count_estimate = 4096;
+      if (file_size / (10*1024*1024*1024) != 0) // 10's of GB
+      {
+        vertex_count_estimate = 100'000'000;
+      }
+      else if (file_size / (1024*1024*1024) != 0) // GBs
+      {
+        vertex_count_estimate = 10'000'000;
+      }
+      else if (file_size / (100*1024*1024) != 0) // 100's of MBs
+      {
+        vertex_count_estimate = 1'000'000;
+      }
+      else if (file_size / (1024*1024) != 0) // MBs
+      {
+        vertex_count_estimate = 100'000;
+      }
+
+      std::vector<uint32_t> degree_map(vertex_count_estimate);
       uint64_t edges = 0;
       uint32_t max = 0;
     

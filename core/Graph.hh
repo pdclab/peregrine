@@ -553,19 +553,6 @@ namespace Peregrine
 
       AnalyzedPattern() {}
 
-      AnalyzedPattern& operator=(const AnalyzedPattern&) = default; // copy assignment
-
-      AnalyzedPattern(const AnalyzedPattern &other)
-        : query_graph(other.query_graph)
-      {
-        check_connected();
-        get_anti_vertices();
-        check_anti_vertices();
-        check_labels();
-        conditions = get_conditions();
-        build_rbi_graph();
-      }
-
       AnalyzedPattern(const SmallGraph &p)
         : query_graph(p)
       {
@@ -1033,6 +1020,8 @@ namespace Peregrine
               result.emplace_back(u, v);
             }
           }
+          aut_map.resize(query_graph.num_vertices(), 0);
+          nautsets = 1;
         }
         else
         {

@@ -79,7 +79,7 @@ namespace Peregrine
       }
     
       // don't start from middle of a line in the file
-      if (nthreads == 1 || thread_id != 0)
+      if (thread_id != 0)
       {
         while (start <= file_size && graph[start-1] != '\n') ++start;
       }
@@ -140,7 +140,7 @@ namespace Peregrine
       }
     
       // don't start from middle of a line in the file
-      if (nthreads == 1 || thread_id != 0)
+      if (thread_id != 0)
       {
         while (start <= file_size && edges[start-1] != '\n') ++start;
       }

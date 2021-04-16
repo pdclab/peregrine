@@ -49,7 +49,7 @@ namespace Peregrine
     {
       // estimate number of vertices based on file_size
       uint32_t vertex_count_estimate = 4096;
-      if (file_size / (10*1024*1024*1024) != 0) // 10's of GB
+      if (file_size / (10lu*1024*1024*1024) != 0) // 10's of GB
       {
         vertex_count_estimate = 100'000'000;
       }

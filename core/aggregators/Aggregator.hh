@@ -34,7 +34,7 @@ namespace Peregrine
   };
   
   template <typename AggKeyT, typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
-  struct MapAggHandle;
+  class MapAggHandle;
   
   template <typename AggKeyT, typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
   struct MapAggregator
@@ -50,6 +50,7 @@ namespace Peregrine
     {}
   
     MapAggregator(MapAggregator &) = delete;
+    ~MapAggregator() { for (auto handle : handles) delete handle; }
   
     std::unordered_map<AggKeyT, AggValueT> global;
     std::vector<std::atomic<MapAggItem<AggKeyT, AggValueT>>> values;
@@ -121,10 +122,10 @@ namespace Peregrine
       flag.compare_exchange_strong(expected, ON());
     }
   
-    void register_handle(uint32_t id, AggHandle &ah)
+    void register_handle(uint32_t id, AggHandle *ah)
     {
-      values[id] = {&ah.other, false};
-      handles[id] = &ah;
+      values[id] = {&ah->other, false};
+      handles[id] = ah;
     }
   };
   

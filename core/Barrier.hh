@@ -21,14 +21,11 @@ namespace Peregrine
         uint32_t n = workers_waiting.fetch_add(1, std::memory_order_relaxed);
         if (n+1 == n_workers)
         {
-          // can't allow thread to exit while holding lock
-          pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
           // notify coordinator
           {
             std::lock_guard l(mtx);
             all_workers_waiting = true;
           }
-          pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
           workers_cv.notify_all();
         }
 
@@ -63,13 +60,11 @@ namespace Peregrine
 
       void stopAll()
       {
-        pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, 0);
         {
           std::unique_lock l(mtx);
           kill_all = true;
           all_workers_waiting = true;
         }
-        pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, 0);
         workers_cv.notify_all();
         pthread_exit(0);
       }

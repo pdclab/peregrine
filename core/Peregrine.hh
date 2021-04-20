@@ -37,16 +37,16 @@
   switch (L)\
   {\
     case Graph::LABELLED:\
-      match_loop<Graph::LABELLED, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(dg, process, cands, ah);\
+      match_loop<Graph::LABELLED, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(stoken, dg, process, cands, ah);\
       break;\
     case Graph::UNLABELLED:\
-      match_loop<Graph::UNLABELLED, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(dg, process, cands, ah);\
+      match_loop<Graph::UNLABELLED, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(stoken, dg, process, cands, ah);\
       break;\
     case Graph::PARTIALLY_LABELLED:\
-      match_loop<Graph::PARTIALLY_LABELLED, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(dg, process, cands, ah);\
+      match_loop<Graph::PARTIALLY_LABELLED, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(stoken, dg, process, cands, ah);\
       break;\
     case Graph::DISCOVER_LABELS:\
-      match_loop<Graph::DISCOVER_LABELS, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(dg, process, cands, ah);\
+      match_loop<Graph::DISCOVER_LABELS, has_anti_edges, has_anti_vertices, OnTheFly, Stoppable>(stoken, dg, process, cands, ah);\
       break;\
   }\
 }
@@ -85,7 +85,7 @@ namespace Peregrine
     StoppableOption Stoppable,
     typename Func,
     typename HandleType>
-  inline void match_loop(DataGraph *dg, const Func &process, std::vector<std::vector<uint32_t>> &cands, HandleType &a)
+  inline void match_loop(std::stop_token stoken, DataGraph *dg, const Func &process, std::vector<std::vector<uint32_t>> &cands, HandleType &a)
   {
     uint32_t vgs_count = dg->get_vgs_count();
     uint32_t num_vertices = dg->get_vertex_count();
@@ -96,17 +96,17 @@ namespace Peregrine
     {
       uint32_t v = (task-1) / vgs_count + 1;
       uint32_t vgsi = task % vgs_count;
-      Matcher<has_anti_vertices, Stoppable, decltype(process)> m(dg->rbi, dg, vgsi, cands, process);
+      Matcher<has_anti_vertices, Stoppable, decltype(process)> m(stoken, dg->rbi, dg, vgsi, cands, process);
       m.template map_into<L, has_anti_edges>(v);
 
       if constexpr (Stoppable == STOPPABLE)
       {
-        pthread_testcancel();
+        if (stoken.stop_requested()) throw StopExploration();
       }
 
       if constexpr (OnTheFly == ON_THE_FLY)
       {
-        a.submit();
+        a->submit();
       }
     }
   }
@@ -132,7 +132,7 @@ namespace Peregrine
     return lcount;
   }
 
-  void count_worker(unsigned tid, DataGraph *dg, Barrier &b)
+  void count_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b)
   {
     (void)tid; // unused
 
@@ -155,6 +155,7 @@ namespace Peregrine
 
       if (has_anti_edges)
       {
+        // unstoppable guarantees no exceptions thrown
         constexpr StoppableOption Stoppable = UNSTOPPABLE;
         constexpr OnTheFlyOption OnTheFly = AT_THE_END;
 
@@ -197,19 +198,19 @@ namespace Peregrine
     typename AggregatorType,
     typename F
   >
-  void map_worker(unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
+  void map_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
   {
     // an extra pre-allocated cand vector for scratch space, and one for anti-vertex
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
 
     using ViewFunc = decltype(a.viewer);
-    MapAggHandle<AggKeyT, AggValueT, OnTheFly, Stoppable, ViewFunc> ah(tid, &a, b);
+    auto *ah = new MapAggHandle<AggKeyT, AggValueT, OnTheFly, Stoppable, ViewFunc>(tid, &a, b);
     a.register_handle(tid, ah);
 
     while (b.hit())
     {
-      ah.reset();
-      const auto process = [&ah, &p](const CompleteMatch &cm) { p(ah, cm); };
+      ah->reset();
+      const auto process = [&ah, &p](const CompleteMatch &cm) { p(*ah, cm); };
       Graph::Labelling L = dg->rbi.labelling_type();
       bool has_anti_edges = dg->rbi.has_anti_edges();
       bool has_anti_vertices = !dg->rbi.anti_vertices.empty();
@@ -220,28 +221,32 @@ namespace Peregrine
         cand.reserve(10000);
       }
 
-      if (has_anti_edges)
+      try
       {
-        if (has_anti_vertices)
+        if (has_anti_edges)
         {
-          CALL_MATCH_LOOP(L, true, true);
+          if (has_anti_vertices)
+          {
+            CALL_MATCH_LOOP(L, true, true);
+          }
+          else
+          {
+            CALL_MATCH_LOOP(L, true, false);
+          }
         }
         else
         {
-          CALL_MATCH_LOOP(L, true, false);
+          if (has_anti_vertices)
+          {
+            CALL_MATCH_LOOP(L, false, true);
+          }
+          else
+          {
+            CALL_MATCH_LOOP(L, false, false);
+          }
         }
       }
-      else
-      {
-        if (has_anti_vertices)
-        {
-          CALL_MATCH_LOOP(L, false, true);
-        }
-        else
-        {
-          CALL_MATCH_LOOP(L, false, false);
-        }
-      }
+      catch(StopExploration &) {}
     }
   }
 
@@ -253,19 +258,19 @@ namespace Peregrine
     typename AggregatorType,
     typename F
   >
-  void single_worker(unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
+  void single_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
   {
     // an extra pre-allocated cand vector for scratch space, and one for anti-vertex
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
 
     using ViewFunc = decltype(a.viewer);
-    SVAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc> ah(tid, &a, b);
+    auto *ah = new SVAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc>(tid, &a, b);
     a.register_handle(tid, ah);
 
     while (b.hit())
     {
-      ah.reset();
-      const auto process = [&ah, &p](const CompleteMatch &cm) { p(ah, cm); };
+      ah->reset();
+      const auto process = [&ah, &p](const CompleteMatch &cm) { p(*ah, cm); };
 
       Graph::Labelling L = dg->rbi.labelling_type();
       bool has_anti_edges = dg->rbi.has_anti_edges();
@@ -277,28 +282,32 @@ namespace Peregrine
         cand.reserve(10000);
       }
 
-      if (has_anti_edges)
+      try
       {
-        if (has_anti_vertices)
+        if (has_anti_edges)
         {
-          CALL_MATCH_LOOP(L, true, true);
+          if (has_anti_vertices)
+          {
+            CALL_MATCH_LOOP(L, true, true);
+          }
+          else
+          {
+            CALL_MATCH_LOOP(L, true, false);
+          }
         }
         else
         {
-          CALL_MATCH_LOOP(L, true, false);
+          if (has_anti_vertices)
+          {
+            CALL_MATCH_LOOP(L, false, true);
+          }
+          else
+          {
+            CALL_MATCH_LOOP(L, false, false);
+          }
         }
       }
-      else
-      {
-        if (has_anti_vertices)
-        {
-          CALL_MATCH_LOOP(L, false, true);
-        }
-        else
-        {
-          CALL_MATCH_LOOP(L, false, false);
-        }
-      }
+      catch(StopExploration &) {}
     }
   }
 
@@ -309,19 +318,19 @@ namespace Peregrine
     typename AggregatorType,
     typename F
   >
-  void vector_worker(unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
+  void vector_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
   {
     // an extra pre-allocated cand vector for scratch space, and one for anti-vertex
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
 
     using ViewFunc = decltype(a.viewer);
-    VecAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc> ah(tid, &a, b);
+    auto *ah = new VecAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc>(tid, &a, b);
     a.register_handle(tid, ah);
 
     while (b.hit())
     {
-      ah.reset();
-      const auto process = [&ah, &p](const CompleteMatch &cm) { p(ah, cm); };
+      ah->reset();
+      const auto process = [&ah, &p](const CompleteMatch &cm) { p(*ah, cm); };
 
       Graph::Labelling L = dg->rbi.labelling_type();
       bool has_anti_edges = dg->rbi.has_anti_edges();
@@ -333,28 +342,32 @@ namespace Peregrine
         cand.reserve(10000);
       }
 
-      if (has_anti_edges)
+      try
       {
-        if (has_anti_vertices)
+        if (has_anti_edges)
         {
-          CALL_MATCH_LOOP(L, true, true);
+          if (has_anti_vertices)
+          {
+            CALL_MATCH_LOOP(L, true, true);
+          }
+          else
+          {
+            CALL_MATCH_LOOP(L, true, false);
+          }
         }
         else
         {
-          CALL_MATCH_LOOP(L, true, false);
+          if (has_anti_vertices)
+          {
+            CALL_MATCH_LOOP(L, false, true);
+          }
+          else
+          {
+            CALL_MATCH_LOOP(L, false, false);
+          }
         }
       }
-      else
-      {
-        if (has_anti_vertices)
-        {
-          CALL_MATCH_LOOP(L, false, true);
-        }
-        else
-        {
-          CALL_MATCH_LOOP(L, false, false);
-        }
-      }
+      catch(StopExploration &) {}
     }
   }
 
@@ -507,7 +520,7 @@ namespace Peregrine
 
     // initialize
     Barrier barrier(nworkers);
-    std::vector<std::thread> pool;
+    std::vector<std::jthread> pool;
     DataGraph *dg(Context::data_graph);
     dg->set_rbi(patterns.front());
 
@@ -560,47 +573,57 @@ namespace Peregrine
       // sleep until matching finished
       bool called_stop = barrier.join();
 
-      aggregator.get_result();
-
-      if constexpr (Stoppable == STOPPABLE)
+      if (called_stop)
       {
-        if (called_stop)
+        // cancel
+        barrier.finish();
+        for (auto &th : pool)
         {
-          // cancel
-          for (auto &th : pool)
-          {
-            pthread_cancel(th.native_handle());
-          }
-
-          // wait for them all to end
-          for (auto &th : pool)
-          {
-            th.join();
-          }
-
-          pool.clear();
-          barrier.reset();
-
-          // restart workers
-          for (uint8_t i = 0; i < nworkers; ++i)
-          {
-            pool.emplace_back(map_worker<
-                  AggKeyT,
-                  AggValueT,
-                  OnTheFly,
-                  Stoppable,
-                  decltype(aggregator),
-                  PF
-                >,
-                i,
-                dg,
-                std::ref(barrier),
-                std::ref(aggregator),
-                std::ref(process));
-          }
-
-          barrier.join();
+          //pthread_cancel(th.native_handle());
+          th.request_stop();
         }
+
+        // wait for them all to end
+        for (auto &th : pool)
+        {
+          th.join();
+        }
+
+        pool.clear();
+        barrier.reset();
+
+        // don't need to get thread-local values before killing threads, since
+        // their lifetime is separate from the threads;
+        // however we do need to extract results before restarting the workers,
+        // which will register new handles.
+        aggregator.get_result();
+
+        // before restarting workers, delete old handles
+        for (auto handle : aggregator.handles) delete handle;
+
+        // restart workers
+        for (uint8_t i = 0; i < nworkers; ++i)
+        {
+          pool.emplace_back(map_worker<
+                AggKeyT,
+                AggValueT,
+                OnTheFly,
+                Stoppable,
+                decltype(aggregator),
+                PF
+              >,
+              i,
+              dg,
+              std::ref(barrier),
+              std::ref(aggregator),
+              std::ref(process));
+        }
+
+        barrier.join();
+      }
+      else
+      {
+        aggregator.get_result();
       }
 
       for (auto &[k, v] : aggregator.latest_result)
@@ -638,7 +661,7 @@ namespace Peregrine
 
     // initialize
     Barrier barrier(nworkers);
-    std::vector<std::thread> pool;
+    std::vector<std::jthread> pool;
     DataGraph *dg(Context::data_graph);
     dg->set_rbi(patterns.front());
 
@@ -689,48 +712,58 @@ namespace Peregrine
       // sleep until matching finished
       bool called_stop = barrier.join();
 
-      // need to get thread-local values before killing threads
-      aggregator.get_result();
-      results.emplace_back(p, aggregator.latest_result.load());
-
-      if constexpr (Stoppable == STOPPABLE)
+      if (called_stop)
       {
-        if (called_stop)
+        // cancel
+        barrier.finish();
+        for (auto &th : pool)
         {
-          // cancel
-          for (auto &th : pool)
-          {
-            pthread_cancel(th.native_handle());
-          }
-
-          // wait for them all to end
-          for (auto &th : pool)
-          {
-            th.join();
-          }
-
-          pool.clear();
-          barrier.reset();
-
-          // restart workers
-          for (uint8_t i = 0; i < nworkers; ++i)
-          {
-            pool.emplace_back(single_worker<
-                  AggValueT,
-                  OnTheFly,
-                  Stoppable,
-                  decltype(aggregator),
-                  PF
-                >,
-                i,
-                dg,
-                std::ref(barrier),
-                std::ref(aggregator),
-                std::ref(process));
-          }
-
-          barrier.join();
+          //pthread_cancel(th.native_handle());
+          th.request_stop();
         }
+
+        // wait for them all to end
+        for (auto &th : pool)
+        {
+          th.join();
+        }
+
+        pool.clear();
+        barrier.reset();
+
+        // don't need to get thread-local values before killing threads, since
+        // their lifetime is separate from the threads;
+        // however we do need to extract results before restarting the workers,
+        // which will register new handles.
+        aggregator.get_result();
+        results.emplace_back(p, aggregator.latest_result.load());
+
+        // before restarting workers, delete old handles
+        for (auto handle : aggregator.handles) delete handle;
+
+        // restart workers
+        for (uint8_t i = 0; i < nworkers; ++i)
+        {
+          pool.emplace_back(single_worker<
+                AggValueT,
+                OnTheFly,
+                Stoppable,
+                decltype(aggregator),
+                PF
+              >,
+              i,
+              dg,
+              std::ref(barrier),
+              std::ref(aggregator),
+              std::ref(process));
+        }
+
+        barrier.join();
+      }
+      else
+      {
+        aggregator.get_result();
+        results.emplace_back(p, aggregator.latest_result.load());
       }
     }
     auto t2 = utils::get_timestamp();
@@ -763,7 +796,7 @@ namespace Peregrine
 
     // initialize
     Barrier barrier(nworkers);
-    std::vector<std::thread> pool;
+    std::vector<std::jthread> pool;
     DataGraph *dg(Context::data_graph);
     dg->set_rbi(patterns.front());
 
@@ -815,46 +848,56 @@ namespace Peregrine
       // sleep until matching finished
       bool called_stop = barrier.join();
 
-      aggregator.get_result();
-
-      if constexpr (Stoppable == STOPPABLE)
+      if (called_stop)
       {
-        if (called_stop)
+        // cancel
+        barrier.finish();
+        for (auto &th : pool)
         {
-          // cancel
-          for (auto &th : pool)
-          {
-            pthread_cancel(th.native_handle());
-          }
-
-          // wait for them all to end
-          for (auto &th : pool)
-          {
-            th.join();
-          }
-
-          pool.clear();
-          barrier.reset();
-
-          // restart workers
-          for (uint8_t i = 0; i < nworkers; ++i)
-          {
-            pool.emplace_back(vector_worker<
-                  AggValueT,
-                  OnTheFly,
-                  Stoppable,
-                  decltype(aggregator),
-                  PF
-                >,
-                i,
-                dg,
-                std::ref(barrier),
-                std::ref(aggregator),
-                std::ref(process));
-          }
-
-          barrier.join();
+          //pthread_cancel(th.native_handle());
+          th.request_stop();
         }
+
+        // wait for them all to end
+        for (auto &th : pool)
+        {
+          th.join();
+        }
+
+        pool.clear();
+        barrier.reset();
+
+        // don't need to get thread-local values before killing threads, since
+        // their lifetime is separate from the threads;
+        // however we do need to extract results before restarting the workers,
+        // which will register new handles.
+        aggregator.get_result();
+
+        // before restarting workers, delete old handles
+        for (auto handle : aggregator.handles) delete handle;
+
+        // restart workers
+        for (uint8_t i = 0; i < nworkers; ++i)
+        {
+          pool.emplace_back(vector_worker<
+                AggValueT,
+                OnTheFly,
+                Stoppable,
+                decltype(aggregator),
+                PF
+              >,
+              i,
+              dg,
+              std::ref(barrier),
+              std::ref(aggregator),
+              std::ref(process));
+        }
+
+        barrier.join();
+      }
+      else
+      {
+        aggregator.get_result();
       }
 
       std::vector<uint32_t> ls(p.get_labels().cbegin(), p.get_labels().cend());
@@ -957,7 +1000,7 @@ namespace Peregrine
     }
 
     Barrier barrier(nworkers);
-    std::vector<std::thread> pool;
+    std::vector<std::jthread> pool;
 
     DataGraph *dg;
     if constexpr (std::is_same_v<std::decay_t<DataGraphT>, DataGraph>)

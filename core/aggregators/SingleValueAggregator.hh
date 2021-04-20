@@ -30,6 +30,7 @@ namespace Peregrine
         latest_result(ViewType())
     {}
     SVAggregator(SVAggregator &) = delete;
+    ~SVAggregator() { for (auto handle : handles) delete handle; }
   
     AggValueT global;
     std::vector<std::atomic<SVAggItem<AggValueT>>> values;
@@ -40,6 +41,7 @@ namespace Peregrine
   
     bool stale(uint32_t id) const
     {
+      assert(!values.empty());
       return !values[id].load().fresh;
     }
   
@@ -61,11 +63,13 @@ namespace Peregrine
   
     void update_unchecked()
     {
+      assert(!values.empty());
       for (auto &val : values)
       {
         if (val.load().fresh)
         {
           auto i = val.load().v;
+          assert(i != nullptr);
           global += *i;
           val.store({i, false});
         }
@@ -98,10 +102,10 @@ namespace Peregrine
       flag.compare_exchange_strong(expected, ON());
     }
   
-    void register_handle(uint32_t id, AggHandle &ah)
+    void register_handle(uint32_t id, AggHandle *ah)
     {
-      values[id] = {&ah.other, false};
-      handles[id] = &ah;
+      values[id] = {&ah->other, false};
+      handles[id] = ah;
     }
   };
   

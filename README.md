@@ -37,7 +37,7 @@ For an in-depth summary, watch the video presentation:
 ## 1. Quick start
 
 Peregrine has been tested on Ubuntu 18.04 and Arch Linux but should work on any
-POSIX-y OS. It requires C++20 support (GCC version >= 9.2.1). Additionally, the
+POSIX-y OS. It requires C++20 support (GCC version >= 10.1). Additionally, the
 tests require [UnitTest++](https://github.com/unittest-cpp/unittest-cpp).
 
 Ubuntu 18.04 prerequisites:

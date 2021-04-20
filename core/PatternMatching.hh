@@ -120,6 +120,12 @@
 
 namespace Peregrine
 {
+  struct StopExploration : public std::exception
+  {
+    static constexpr const char *msg = "Exploration stopped as requested.";
+    const char *what() { return msg; }
+  };
+
   uint64_t binom(uint32_t n, uint32_t k)
   {
     uint64_t res = 1;
@@ -337,8 +343,8 @@ namespace Peregrine
   template <bool HAV, StoppableOption stoppable, typename Func>
   struct Matcher
   {
-    Matcher(const AnalyzedPattern &r, const DataGraph * const dg, uint8_t vgsi, std::vector<std::vector<uint32_t>> &cands, const Func &f)
-      : rbi(r), vgsi(vgsi), vgs(rbi.vgs[vgsi]), gpb(dg), qo(rbi.qo_book[vgsi]), cands(cands), user_process(f) {}
+    Matcher(std::stop_token stoken, const AnalyzedPattern &r, const DataGraph * const dg, uint8_t vgsi, std::vector<std::vector<uint32_t>> &cands, const Func &f)
+      : stoken(stoken), rbi(r), vgsi(vgsi), vgs(rbi.vgs[vgsi]), gpb(dg), qo(rbi.qo_book[vgsi]), cands(cands), user_process(f) {}
 
     template <bool HAE, Graph::Labelling L>
     void nonCoreVertexMatching(const partial_match<L> &mvgs)
@@ -502,9 +508,9 @@ namespace Peregrine
 
         // generate candidate sets for sibling groups
         uint8_t idx = 0;
+        if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
         for (const uint32_t g : sibgroups)
         {
-          if constexpr (stoppable == STOPPABLE) pthread_testcancel();
 
           const auto &true_parents = p.get_neighbours(g);
           const auto &anti_parents = p.get_anti_neighbours(g);
@@ -541,9 +547,9 @@ namespace Peregrine
 
           candidates.assign(start, end);
 
+          if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
           for (uint32_t i = 1; i < true_parents.size(); ++i)
           {
-            if constexpr (stoppable == STOPPABLE) pthread_testcancel();
             const uint32_t du = m.at(true_parents[i]);
             const adjlist &duadj = gpb->get_adj(du);
             t.clear();
@@ -556,9 +562,9 @@ namespace Peregrine
 
           // can't guard this with HAE since vertex induced doesn't count as HAE
           {
+            if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
             for (uint32_t i = 0; i < anti_parents.size(); ++i)
             {
-              if constexpr (stoppable == STOPPABLE) pthread_testcancel();
               if (p.is_anti_vertex(anti_parents[i])) continue;
               const uint32_t du = m.at(anti_parents[i]);
               const adjlist &duadj = gpb->get_adj(du);
@@ -576,7 +582,7 @@ namespace Peregrine
       }
 
       { // generate views
-        if constexpr (stoppable == STOPPABLE) pthread_testcancel();
+        if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
         uint8_t oidx = 0;
         for (const auto &g : ordgs)
         {
@@ -614,7 +620,7 @@ namespace Peregrine
       }
 
       { // matching
-        if constexpr (stoppable == STOPPABLE) pthread_testcancel();
+        if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
         const auto &unmatched = rbi.ncore_vertices;
         if (unmatched.size() == 1)
         {
@@ -721,7 +727,6 @@ namespace Peregrine
           uint8_t idx = 0;
           while (true)
           {
-            if constexpr (stoppable == STOPPABLE) pthread_testcancel();
             uint32_t qv = unmatched[idx];
             if (idx == sz-1)
             {
@@ -1013,6 +1018,7 @@ namespace Peregrine
               }
             }
 
+            if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
             uint8_t idx = 0;
             while (true)
             {
@@ -1115,7 +1121,6 @@ namespace Peregrine
       // all vertices in the range [levels, key) have been matched
       // want all such vertices that are adjacent to qo[key]
       for (const uint32_t m : true_edges) {
-        if constexpr (stoppable == STOPPABLE) pthread_testcancel();
         for (uint32_t qi = 0; qi < idx; ++qi) {
           if (m == qo[qi]) {
             assert(mvgs.mapped(m));
@@ -1133,7 +1138,6 @@ namespace Peregrine
       uint32_t upper_bound = static_cast<uint32_t>(-1); // largest possible
       for (uint32_t i = 0; i < idx; ++i)
       {
-        if constexpr (stoppable == STOPPABLE) pthread_testcancel();
         if (qo[i] < qo[idx]) lower_bound = std::max(lower_bound, qo[i]);
         else if (qo[i] > qo[idx]) upper_bound = std::min(upper_bound, qo[i]);
       }
@@ -1141,6 +1145,7 @@ namespace Peregrine
       // enforce total ordering on core vertices by only considering correct
       // range of candidate data vertices
 
+      if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
       start = lower_bound > 0
         ? std::upper_bound(adj.ptr, adj.ptr + adj.length, mvgs.at(lower_bound))
         : start;
@@ -1151,10 +1156,9 @@ namespace Peregrine
 
       xsection.assign(start, end);
 
+      if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
       for (unsigned i = 1; i < Ucon.size(); ++i)
       {
-        if constexpr (stoppable == STOPPABLE) pthread_testcancel();
-
         std::vector<uint32_t> t;
         t.swap(xsection);
 
@@ -1187,7 +1191,6 @@ namespace Peregrine
         // all vertices in the range [levels, key) have been matched
         // want all such vertices that are adjacent to qo[key]
         for (const uint32_t m : not_edges) {
-          if constexpr (stoppable == STOPPABLE) pthread_testcancel();
           for (uint32_t qi = 0; qi < idx; ++qi) {
             if (m == qo[qi]) {
               assert(mvgs.mapped(m));
@@ -1196,10 +1199,9 @@ namespace Peregrine
           }
         }
 
+        if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
         for (const uint32_t n : nUcon)
         {
-          if constexpr (stoppable == STOPPABLE) pthread_testcancel();
-
           std::vector<uint32_t> t;
           t.swap(xsection);
 
@@ -1344,7 +1346,7 @@ namespace Peregrine
       // don't need to worry about duplicates (i.e. no !data_mapped() checks)
       // because the candidates we generate for core vertices are totally
       // ordered
-      if constexpr (stoppable == STOPPABLE) pthread_testcancel();
+      if constexpr (stoppable == STOPPABLE) if (stoken.stop_requested()) throw StopExploration();
       if (idx == vgs_size-1)
       {
         const auto &candidates = cands[idx];
@@ -1360,7 +1362,6 @@ namespace Peregrine
       {
         while (idx > 0)
         {
-          if constexpr (stoppable == STOPPABLE) pthread_testcancel();
           const auto &candidates = cands[idx];
 
           const uint32_t key = qo[idx];
@@ -1397,6 +1398,7 @@ namespace Peregrine
       }
     }
 
+    std::stop_token stoken;
     const AnalyzedPattern &rbi;
     unsigned vgsi;
     const SmallGraph &vgs;
@@ -2158,7 +2160,7 @@ namespace Peregrine
     const auto process = [&count](const CompleteMatch &) -> void { count += 1; };
     for (uint32_t vgsi = 0; vgsi < vgs_count; ++vgsi)
     {
-      Matcher<false, UNSTOPPABLE, decltype(process)> m(dg.rbi, &dg, vgsi, cands, process);
+      Matcher<false, UNSTOPPABLE, decltype(process)> m(std::stop_token(), dg.rbi, &dg, vgsi, cands, process);
       for (uint32_t v = 1; v <= num_vertices; ++v)
       {
         m.map_into<Graph::UNLABELLED>(v);

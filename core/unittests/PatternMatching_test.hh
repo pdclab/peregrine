@@ -139,7 +139,7 @@ void matchPattern(DataGraph &dg,
     {
       for (uint32_t vgsi = 0; vgsi < vgs_count; ++vgsi)
       {
-        Peregrine::Matcher<true, UNSTOPPABLE, decltype(process)> m(dg.rbi, &dg, vgsi, cands, process);
+        Peregrine::Matcher<true, UNSTOPPABLE, decltype(process)> m(std::stop_token(), dg.rbi, &dg, vgsi, cands, process);
         for (uint32_t v = 1; v <= num_vertices; ++v)
         {
           m.template map_into<L, true>(v);
@@ -150,7 +150,7 @@ void matchPattern(DataGraph &dg,
     {
       for (uint32_t vgsi = 0; vgsi < vgs_count; ++vgsi)
       {
-        Peregrine::Matcher<false, UNSTOPPABLE, decltype(process)> m(dg.rbi, &dg, vgsi, cands, process);
+        Peregrine::Matcher<false, UNSTOPPABLE, decltype(process)> m(std::stop_token(), dg.rbi, &dg, vgsi, cands, process);
         for (uint32_t v = 1; v <= num_vertices; ++v)
         {
           m.template map_into<L, true>(v);
@@ -164,7 +164,7 @@ void matchPattern(DataGraph &dg,
     {
       for (uint32_t vgsi = 0; vgsi < vgs_count; ++vgsi)
       {
-        Peregrine::Matcher<true, UNSTOPPABLE, decltype(process)> m(dg.rbi, &dg, vgsi, cands, process);
+        Peregrine::Matcher<true, UNSTOPPABLE, decltype(process)> m(std::stop_token(), dg.rbi, &dg, vgsi, cands, process);
         for (uint32_t v = 1; v <= num_vertices; ++v)
         {
           m.template map_into<L, false>(v);
@@ -175,7 +175,7 @@ void matchPattern(DataGraph &dg,
     {
       for (uint32_t vgsi = 0; vgsi < vgs_count; ++vgsi)
       {
-        Peregrine::Matcher<false, UNSTOPPABLE, decltype(process)> m(dg.rbi, &dg, vgsi, cands, process);
+        Peregrine::Matcher<false, UNSTOPPABLE, decltype(process)> m(std::stop_token(), dg.rbi, &dg, vgsi, cands, process);
         for (uint32_t v = 1; v <= num_vertices; ++v)
         {
           m.template map_into<L, false>(v);

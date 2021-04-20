@@ -34,6 +34,7 @@ namespace Peregrine
     {}
   
     VecAggregator(VecAggregator &) = delete;
+    ~VecAggregator() { for (auto handle : handles) delete handle; }
   
     const uint32_t VEC_AGG_OFFSET;
     const uint32_t VEC_AGG_SIZE;
@@ -110,10 +111,10 @@ namespace Peregrine
       flag.compare_exchange_strong(expected, ON());
     }
   
-    void register_handle(uint32_t id, AggHandle &ah)
+    void register_handle(uint32_t id, AggHandle *ah)
     {
-      values[id] = {&ah.other, false};
-      handles[id] = &ah;
+      values[id] = {&ah->other, false};
+      handles[id] = ah;
     }
   };
   

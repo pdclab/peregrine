@@ -76,6 +76,7 @@ namespace Peregrine
 
       void reset()
       {
+        s = WAIT;
         kill_all = false;
         all_workers_waiting = false;
         workers_waiting = 0;

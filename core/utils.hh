@@ -24,7 +24,7 @@ struct Log
   Log() {}
   ~Log() { std::cout << std::flush; }
 
-#ifdef TESTING
+#if defined(TESTING) || defined(PRG_DISABLE_LOGGING)
   template <typename T>
   const Log &operator<<(const T &) const
   {

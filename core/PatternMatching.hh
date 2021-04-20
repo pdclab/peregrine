@@ -640,7 +640,7 @@ namespace Peregrine
               end = std::remove_if(std::execution::unseq,
                   candidates.begin(),
                   candidates.end(),
-                  [this, &l](uint32_t dv) { return gpb->known_label(gpb->label(dv)); });
+                  [this](uint32_t dv) { return gpb->known_label(gpb->label(dv)); });
             }
             else
             {
@@ -706,7 +706,7 @@ namespace Peregrine
             auto e = std::remove_if(std::execution::unseq,
                 candidates.begin(),
                 candidates.end(),
-                [this, &m](uint32_t dv) { return m.data_mapped(dv); });
+                [&m](uint32_t dv) { return m.data_mapped(dv); });
             end = std::distance(candidates.begin(), e);
           }
 
@@ -1337,7 +1337,7 @@ namespace Peregrine
       }
 
       uint8_t idx = 1;
-      uint32_t *cursors = new uint32_t[vgs_size-1](); // last cursor unused?
+      std::vector<uint32_t> cursors(vgs_size-1); // last cursor unused?
 
       get_next_cand<L, HAE>(cands[idx], idx, mvgs);
 
@@ -1395,8 +1395,6 @@ namespace Peregrine
           }
         }
       }
-
-      delete[] cursors;
     }
 
     const AnalyzedPattern &rbi;
@@ -1775,7 +1773,7 @@ namespace Peregrine
               n = std::count_if(std::execution::unseq,
                 candidates.cbegin(),
                 candidates.cend(),
-                [this, label](uint32_t dv) { return !gpb->known_label(gpb->label(dv)); });
+                [this](uint32_t dv) { return !gpb->known_label(gpb->label(dv)); });
             }
 
             return n;

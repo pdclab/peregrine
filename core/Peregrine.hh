@@ -78,7 +78,6 @@ namespace Peregrine
 
 namespace Peregrine
 {
-
   template <Graph::Labelling L,
     bool has_anti_edges,
     bool has_anti_vertices,
@@ -407,7 +406,7 @@ namespace Peregrine
 
     // automatically wrap trivial types so they have .reset() etc
     constexpr bool should_be_wrapped = std::is_trivial<GivenAggValueT>::value;
-    using AggValueT = std::conditional<should_be_wrapped,
+    using AggValueT = typename std::conditional<should_be_wrapped,
       trivial_wrapper<GivenAggValueT>, GivenAggValueT>::type;
     auto view = [&viewer](auto &&v)
     {

@@ -1067,7 +1067,7 @@ namespace Peregrine
           else
           {
             std::sort(sorted_v.begin(), sorted_v.end(),
-                [&degs, &nbr_degs, this](uint32_t a, uint32_t b)
+                [&degs, &nbr_degs](uint32_t a, uint32_t b)
                 {
                   return degs[a] > degs[b]
                     || (degs[a] == degs[b] && nbr_degs[a] > nbr_degs[b]);

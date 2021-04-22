@@ -34,7 +34,7 @@ namespace Peregrine
   };
   
   template <typename AggKeyT, typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
-  class MapAggHandle;
+  struct MapAggHandle;
   
   template <typename AggKeyT, typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
   struct MapAggregator
@@ -130,7 +130,7 @@ namespace Peregrine
   };
   
   template <typename AggKeyT, typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
-  class MapAggHandle
+  struct MapAggHandle
   {
     private:
       using ViewType = decltype(std::declval<ViewFunc>()(std::declval<AggValueT>()));

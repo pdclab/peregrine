@@ -107,7 +107,7 @@ namespace Peregrine
         max = std::max(max, std::max(u, v));
     
         // make sure we have space in the degree map
-        if (max > degree_map.size()) degree_map.resize(max+1);
+        if (max >= degree_map.size()) degree_map.resize(max+1);
     
         // ignore loops
         if (u != v)

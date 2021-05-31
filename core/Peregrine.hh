@@ -6,6 +6,7 @@
 #include <chrono>
 #include <mutex>
 #include <condition_variable>
+#include <filesystem>
 #include <memory>
 
 #include "Options.hh"
@@ -71,6 +72,7 @@ namespace Peregrine
 }
 
 
+#include "OutputManager.hh"
 #include "aggregators/SingleValueAggregator.hh"
 #include "aggregators/VectorAggregator.hh"
 #include "aggregators/Aggregator.hh"
@@ -196,7 +198,8 @@ namespace Peregrine
     OnTheFlyOption OnTheFly,
     StoppableOption Stoppable,
     typename AggregatorType,
-    typename F
+    typename F,
+    OutputOption Output = NONE
   >
   void map_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
   {
@@ -204,7 +207,7 @@ namespace Peregrine
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
 
     using ViewFunc = decltype(a.viewer);
-    auto *ah = new MapAggHandle<AggKeyT, AggValueT, OnTheFly, Stoppable, ViewFunc>(tid, &a, b);
+    auto *ah = new MapAggHandle<AggKeyT, AggValueT, OnTheFly, Stoppable, ViewFunc, Output>(tid, &a, b);
     a.register_handle(tid, ah);
 
     while (b.hit())
@@ -256,7 +259,8 @@ namespace Peregrine
     OnTheFlyOption OnTheFly,
     StoppableOption Stoppable,
     typename AggregatorType,
-    typename F
+    typename F,
+    OutputOption Output = NONE
   >
   void single_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
   {
@@ -264,7 +268,7 @@ namespace Peregrine
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
 
     using ViewFunc = decltype(a.viewer);
-    auto *ah = new SVAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc>(tid, &a, b);
+    auto *ah = new SVAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc, Output>(tid, &a, b);
     a.register_handle(tid, ah);
 
     while (b.hit())
@@ -316,7 +320,8 @@ namespace Peregrine
     OnTheFlyOption OnTheFly,
     StoppableOption Stoppable,
     typename AggregatorType,
-    typename F
+    typename F,
+    OutputOption Output = NONE
   >
   void vector_worker(std::stop_token stoken, unsigned tid, DataGraph *dg, Barrier &b, AggregatorType &a, F &&p)
   {
@@ -324,7 +329,7 @@ namespace Peregrine
     std::vector<std::vector<uint32_t>> cands(dg->rbi.query_graph.num_vertices() + 2);
 
     using ViewFunc = decltype(a.viewer);
-    auto *ah = new VecAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc>(tid, &a, b);
+    auto *ah = new VecAggHandle<AggValueT, OnTheFly, Stoppable, ViewFunc, Output>(tid, &a, b);
     a.register_handle(tid, ah);
 
     while (b.hit())
@@ -394,7 +399,12 @@ namespace Peregrine
   };
 
   template <typename T>
-  T default_viewer(T &&v) { return v; }
+  T default_viewer(T v) { return v; }
+
+  template <OutputOption Output, typename VF, typename GivenAggValueT>
+  using ResultType = std::conditional_t<Output == DISK,
+      std::vector<std::tuple<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>())), std::filesystem::path>>,
+      std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>>>;
 
   template <
     typename AggKeyT,
@@ -403,12 +413,13 @@ namespace Peregrine
     StoppableOption Stoppable,
     typename DataGraphT,
     typename PF,
-    typename VF = decltype(default_viewer<GivenAggValueT>)
+    typename VF = decltype(default_viewer<GivenAggValueT>),
+    OutputOption Output = NONE
   >
-  std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>>
+  ResultType<Output, VF, GivenAggValueT>
   match(DataGraphT &&data_graph,
       const std::vector<SmallGraph> &patterns,
-      size_t nworkers,
+      uint32_t nworkers,
       PF &&process,
       VF viewer = default_viewer<GivenAggValueT>)
   {
@@ -449,7 +460,7 @@ namespace Peregrine
                 << "\n";
     }
 
-    std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>> result;
+    ResultType<Output, VF, GivenAggValueT> result;
 
     // optimize AggKeyT == Pattern
     if constexpr (std::is_same_v<AggKeyT, Pattern>)
@@ -483,13 +494,12 @@ namespace Peregrine
           && Stoppable == UNSTOPPABLE && OnTheFly == AT_THE_END)
       {
         utils::Log{}
-          << "WARN: If you are counting, Peregrine::count() is much faster!"
-          << "\n";
+          << "WARNING: If you are counting, Peregrine::count() is much faster!\n";
       }
 
-      result = match_single<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, single);
-      auto vector_result = match_vector<AggValueT, OnTheFly, Stoppable>(process, view, nworkers, vector);
-      auto multi_result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable>(process, view, nworkers, multi);
+      result = match_single<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, single);
+      auto vector_result = match_vector<AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, vector);
+      auto multi_result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, multi);
 
       result.insert(result.end(), vector_result.begin(), vector_result.end());
       result.insert(result.end(), multi_result.begin(), multi_result.end());
@@ -509,12 +519,12 @@ namespace Peregrine
     return result;
   }
 
-  template <typename AggKeyT, typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename PF, typename VF>
-  std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>>
+  template <typename AggKeyT, typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
+  ResultType<Output, VF, AggValueT>
   match_multi
-  (PF &&process, VF &&viewer, size_t nworkers, const std::vector<SmallGraph> &patterns)
+  (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
   {
-    std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>> results;
+    ResultType<Output, VF, AggValueT> results;
 
     if (patterns.empty()) return results;
 
@@ -526,18 +536,18 @@ namespace Peregrine
 
     Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
 
-    MapAggregator<AggKeyT, AggValueT, OnTheFly, Stoppable, decltype(viewer)> aggregator(nworkers, viewer);
+    MapAggregator<AggKeyT, AggValueT, OnTheFly, Stoppable, decltype(viewer), Output> aggregator(nworkers, viewer);
 
-    for (uint8_t i = 0; i < nworkers; ++i)
+    for (uint32_t i = 0; i < nworkers; ++i)
     {
-      //auto &ah = aggregator.get_handle(i);
       pool.emplace_back(map_worker<
             AggKeyT,
             AggValueT,
             OnTheFly,
             Stoppable,
             decltype(aggregator),
-            PF
+            PF,
+            Output
           >,
           i,
           dg,
@@ -602,7 +612,7 @@ namespace Peregrine
         for (auto handle : aggregator.handles) delete handle;
 
         // restart workers
-        for (uint8_t i = 0; i < nworkers; ++i)
+        for (uint32_t i = 0; i < nworkers; ++i)
         {
           pool.emplace_back(map_worker<
                 AggKeyT,
@@ -610,7 +620,8 @@ namespace Peregrine
                 OnTheFly,
                 Stoppable,
                 decltype(aggregator),
-                PF
+                PF,
+                Output
               >,
               i,
               dg,
@@ -628,7 +639,14 @@ namespace Peregrine
 
       for (auto &[k, v] : aggregator.latest_result)
       {
-        results.emplace_back(SmallGraph(p, k), v);
+        if constexpr (Output == DISK)
+        {
+          results.emplace_back(SmallGraph(p, k), v, OutputManager<DISK>::get_path());
+        }
+        else
+        {
+          results.emplace_back(SmallGraph(p, k), v);
+        }
       }
     }
     auto t2 = utils::get_timestamp();
@@ -650,12 +668,12 @@ namespace Peregrine
     return results;
   }
 
-  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename PF, typename VF>
-  std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>>
+  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
+  ResultType<Output, VF, AggValueT>
   match_single
-  (PF &&process, VF &&viewer, size_t nworkers, const std::vector<SmallGraph> &patterns)
+  (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
   {
-    std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>> results;
+    ResultType<Output, VF, AggValueT> results;
 
     if (patterns.empty()) return results;
 
@@ -667,16 +685,17 @@ namespace Peregrine
 
     Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
 
-    SVAggregator<AggValueT, OnTheFly, Stoppable, decltype(viewer)> aggregator(nworkers, viewer);
+    SVAggregator<AggValueT, OnTheFly, Stoppable, decltype(viewer), Output> aggregator(nworkers, viewer);
 
-    for (uint8_t i = 0; i < nworkers; ++i)
+    for (uint32_t i = 0; i < nworkers; ++i)
     {
       pool.emplace_back(single_worker<
             AggValueT,
             OnTheFly,
             Stoppable,
             decltype(aggregator),
-            PF
+            PF,
+            Output
           >,
           i,
           dg,
@@ -736,20 +755,20 @@ namespace Peregrine
         // however we do need to extract results before restarting the workers,
         // which will register new handles.
         aggregator.get_result();
-        results.emplace_back(p, aggregator.latest_result.load());
 
         // before restarting workers, delete old handles
         for (auto handle : aggregator.handles) delete handle;
 
         // restart workers
-        for (uint8_t i = 0; i < nworkers; ++i)
+        for (uint32_t i = 0; i < nworkers; ++i)
         {
           pool.emplace_back(single_worker<
                 AggValueT,
                 OnTheFly,
                 Stoppable,
                 decltype(aggregator),
-                PF
+                PF,
+                Output
               >,
               i,
               dg,
@@ -763,7 +782,16 @@ namespace Peregrine
       else
       {
         aggregator.get_result();
-        results.emplace_back(p, aggregator.latest_result.load());
+      }
+
+      auto &&v = aggregator.latest_result.load();
+      if constexpr (Output == DISK)
+      {
+        results.emplace_back(p, v, OutputManager<DISK>::get_path());
+      }
+      else
+      {
+        results.emplace_back(p, v);
       }
     }
     auto t2 = utils::get_timestamp();
@@ -785,12 +813,12 @@ namespace Peregrine
     return results;
   }
 
-  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, typename PF, typename VF>
-  std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>>
+  template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
+  ResultType<Output, VF, AggValueT>
   match_vector
-  (PF &&process, VF &&viewer, size_t nworkers, const std::vector<SmallGraph> &patterns)
+  (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
   {
-    std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<AggValueT>()))>> results;
+    ResultType<Output, VF, AggValueT> results;
 
     if (patterns.empty()) return results;
 
@@ -802,17 +830,17 @@ namespace Peregrine
 
     Context::current_pattern = std::make_shared<AnalyzedPattern>(AnalyzedPattern(dg->rbi));
 
-    VecAggregator<AggValueT, OnTheFly, Stoppable, decltype(viewer)> aggregator(nworkers, viewer);
+    VecAggregator<AggValueT, OnTheFly, Stoppable, decltype(viewer), Output> aggregator(nworkers, viewer);
 
-    for (uint8_t i = 0; i < nworkers; ++i)
+    for (uint32_t i = 0; i < nworkers; ++i)
     {
-      //auto &ah = aggregator.get_handle(i);
       pool.emplace_back(vector_worker<
             AggValueT,
             OnTheFly,
             Stoppable,
             decltype(aggregator),
-            PF
+            PF,
+            Output
           >,
           i,
           dg,
@@ -877,14 +905,15 @@ namespace Peregrine
         for (auto handle : aggregator.handles) delete handle;
 
         // restart workers
-        for (uint8_t i = 0; i < nworkers; ++i)
+        for (uint32_t i = 0; i < nworkers; ++i)
         {
           pool.emplace_back(vector_worker<
                 AggValueT,
                 OnTheFly,
                 Stoppable,
                 decltype(aggregator),
-                PF
+                PF,
+                Output
               >,
               i,
               dg,
@@ -906,7 +935,14 @@ namespace Peregrine
       for (auto &m : aggregator.latest_result)
       {
         ls[pl] = aggregator.VEC_AGG_OFFSET + l;
-        results.emplace_back(SmallGraph(p, ls), m.load());
+        if constexpr (Output == DISK)
+        {
+          results.emplace_back(SmallGraph(p, ls), m.load(), OutputManager<DISK>::get_path());
+        }
+        else
+        {
+          results.emplace_back(SmallGraph(p, ls), m.load());
+        }
         l += 1;
       }
     }
@@ -950,7 +986,7 @@ namespace Peregrine
 
   template <typename DataGraphT>
   std::vector<std::pair<SmallGraph, uint64_t>>
-  count(DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns, size_t nworkers)
+  count(DataGraphT &&data_graph, const std::vector<SmallGraph> &patterns, uint32_t nworkers)
   {
     // initialize
     std::vector<std::pair<SmallGraph, uint64_t>> results;
@@ -1022,7 +1058,7 @@ namespace Peregrine
     dg->set_rbi(new_patterns.front());
     dg->set_known_labels(new_patterns);
 
-    for (uint8_t i = 0; i < nworkers; ++i)
+    for (uint32_t i = 0; i < nworkers; ++i)
     {
       pool.emplace_back(count_worker,
           i,
@@ -1077,6 +1113,40 @@ namespace Peregrine
 
     return results;
   }
+
+  template <
+    typename AggKeyT,
+    typename GivenAggValueT,
+    OnTheFlyOption OnTheFly,
+    StoppableOption Stoppable,
+    typename DataGraphT,
+    typename PF,
+    typename VF = decltype(default_viewer<GivenAggValueT>)
+  >
+  std::vector<std::tuple<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>())), std::filesystem::path>>
+  output(DataGraphT &&data_graph,
+      const std::vector<SmallGraph> &patterns,
+      uint32_t nworkers,
+      PF &&process,
+      VF &&viewer = default_viewer<GivenAggValueT>,
+      const std::filesystem::path &result_dir = ".")
+  {
+    OutputManager<DISK>::set_root_directory(result_dir);
+    return match<AggKeyT, GivenAggValueT, OnTheFly, Stoppable, DataGraphT, PF, VF, DISK>(data_graph, patterns, nworkers, process, viewer);
+  }
+
+  template <OutputFormat fmt, typename DataGraphT>
+  std::vector<std::tuple<SmallGraph, uint64_t, std::filesystem::path>>
+  output(DataGraphT &&data_graph,
+      const std::vector<SmallGraph> &patterns,
+      uint32_t nworkers,
+      const std::filesystem::path &result_dir = ".")
+  {
+    const auto process = [](auto &&a, auto &&cm) { a.map(cm.pattern, 1); a.template output<fmt>(cm.mapping); };
+    const auto viewer = [](uint64_t v) { return v; };
+    return output<Pattern, uint64_t, AT_THE_END, UNSTOPPABLE>(std::forward<DataGraphT>(data_graph), patterns, nworkers, process, viewer, result_dir);
+  }
+
 } // namespace Peregrine
 
 #endif

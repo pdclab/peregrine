@@ -22,6 +22,24 @@ namespace Peregrine
     STOPPABLE,
     UNSTOPPABLE,
   };
+
+  /**
+   * Toggle to enable the concurrent disk output module.
+   */
+  enum OutputOption
+  {
+    DISK,
+    NONE
+  };
+
+  /**
+   * Formats for match output.
+   */
+  enum OutputFormat
+  {
+    CSV,
+    BIN
+  };
 }
 
 #endif

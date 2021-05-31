@@ -120,6 +120,29 @@ All patterns finished after 0.005509s
 [pattern omitted due to length] doesn't exist in data/citeseer
 ```
 
+The output application stores matches grouped by pattern in either CSV or packed binary format:
+
+```
+$ bin/output data/citeseer 3-motifs results bin 8
+[...]
+all patterns finished after 0.002905s
+[1-3](1~2)[2-3]: 23380 matches stored in "results/[1-3](1~2)[2-3]"
+[1-2][1-3][2-3]: 1166 matches stored in "results/[1-2][1-3][2-3]"
+```
+
+In the CSV format, for a pattern with `n` vertices each line will contain a match written in the form:
+
+```
+v1,v2,...,vn
+...
+```
+
+In the binary format, matches are written as sequences of `n` 4-byte vertex IDs in binary, with no delimiters:
+
+```
+bits(v1)bits(v2)...bits(vn)...
+```
+
 ## 2. Writing your own programs
 
 In Peregrine's programming model, you provide a data graph, a set of patterns
@@ -244,7 +267,7 @@ DataGraph dg(g);
 
 ### 2.4 Matching patterns
 
-Pattern matching is done through the `match` and `count` functions.
+Pattern matching is done through the `match`, `count`, and `output` functions.
 
 Counting instances of patterns is very simple. Consider the following minimal motifs program:
 
@@ -271,7 +294,7 @@ The arguments to `count` are straightforward: the data graph you wish to use,
 the patterns whose instances you wish to count, and the number of worker
 threads to use.
 
-For arbitrary aggregations, use the `match` template function.
+For arbitrary aggregations, use the `match` or `output` template functions.
 For example, you could replace `count` above with this snippet (note that using
 `count` will be faster):
 
@@ -304,6 +327,31 @@ Users can call three methods on the `handle`:
 - `map(key, value)`: maps `key` to `value`
 - `read_value(key)`: returns a view of the value mapped by `key`
 - `stop()`: halts exploration early
+
+The `output` function takes the same template parameters and arguments as `match`, but allows you to write matches to disk using the `callback`:
+
+```
+  const auto callback = [](auto &&handle, auto &&match)
+  {
+    handle.map(match.pattern, 1);
+    handle.template output<CSV>(match.mapping); // this writes out matches
+  };
+  auto results = output<Pattern, uint64_t, AT_THE_END, UNSTOPPABLE>(g, patterns, nthreads, callback);
+```
+
+You can pass `output` an additional argument to specify where to put results (by default it writes them under "."):
+
+```
+  auto results = output<Pattern, uint64_t, AT_THE_END, UNSTOPPABLE>(g, patterns, nthreads, callback, default_view<uint64_t>, "/destination/path/");
+```
+
+In the simple case that you want to output all matches and don't require any other processing, you can call an overloaded definition of `output`:
+
+```
+auto results = output<CSV>(g, patterns, nthreads, "/destination/path/");
+```
+
+You can output matches in CSV or binary formats (`Peregrine::CSV` or `Peregrine::BIN`).
 
 ## 3. Data graphs
 

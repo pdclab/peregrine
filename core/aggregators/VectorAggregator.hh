@@ -3,6 +3,8 @@
 
 #include "../Options.hh"
 #include "../Barrier.hh"
+#include "../OutputManager.hh"
+
 #include <vector>
 
 namespace Peregrine
@@ -14,14 +16,14 @@ namespace Peregrine
     bool fresh;
   };
   
-  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
+  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc, OutputOption Output = NONE>
   struct VecAggHandle;
   
-  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
+  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc, OutputOption Output = NONE>
   struct VecAggregator
   {
     using ViewType = decltype(std::declval<ViewFunc>()(std::declval<AggValueT>()));
-    using AggHandle = VecAggHandle<AggValueT, onthefly, stoppable, ViewFunc>;
+    using AggHandle = VecAggHandle<AggValueT, onthefly, stoppable, ViewFunc, Output>;
   
     VecAggregator(uint32_t nworkers, ViewFunc &vf)
       : VEC_AGG_OFFSET(Context::data_graph->get_label_range().first),
@@ -118,11 +120,11 @@ namespace Peregrine
     }
   };
   
-  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
+  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc, OutputOption Output>
   struct VecAggHandle
   {
     using ViewType = decltype(std::declval<ViewFunc>()(std::declval<AggValueT>()));
-    using Aggregator = VecAggregator<AggValueT, onthefly, stoppable, ViewFunc>;
+    using Aggregator = VecAggregator<AggValueT, onthefly, stoppable, ViewFunc, Output>;
 
     const uint32_t VEC_AGG_OFFSET;
     const uint32_t VEC_AGG_SIZE;
@@ -134,6 +136,8 @@ namespace Peregrine
     Aggregator *agg;
     uint32_t new_label_idx;
     Barrier &barrier;
+
+    OutputManager<Output> bm;
 
     VecAggHandle(uint32_t tid, Aggregator *a, Barrier &b)
       : VEC_AGG_OFFSET(Context::data_graph->get_label_range().first),
@@ -164,6 +168,11 @@ namespace Peregrine
       other.resize(VEC_AGG_SIZE);
 
       new_label_idx = Context::data_graph->new_label;
+
+      if constexpr (Output != NONE)
+      {
+        bm.reset(id);
+      }
     }
   
     ViewType read_value(const std::vector<uint32_t> &k)
@@ -189,6 +198,18 @@ namespace Peregrine
         // set freshness
         agg->set_fresh(id);
       }
+
+      if constexpr (Output != NONE)
+      {
+        // flush output buffer
+        bm.flush();
+      }
+    }
+
+    template <OutputFormat fmt> requires (Output != NONE)
+    void output(const std::vector<uint32_t> &vertices)
+    {
+      bm.template output<fmt>(vertices);
     }
   };
 }

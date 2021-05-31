@@ -3,9 +3,11 @@
 
 #include "../Options.hh"
 #include "../Barrier.hh"
+#include "../OutputManager.hh"
 
 namespace Peregrine
 {
+
   template <typename AggValueT>
   struct SVAggItem
   {
@@ -13,24 +15,14 @@ namespace Peregrine
     bool fresh;
   };
   
-  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
+  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc, OutputOption Output = NONE>
   struct SVAggHandle;
   
-  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
+  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc, OutputOption Output = NONE>
   struct SVAggregator
   {
     using ViewType = decltype(std::declval<ViewFunc>()(std::declval<AggValueT>()));
-    using AggHandle = SVAggHandle<AggValueT, onthefly, stoppable, ViewFunc>;
-  
-    SVAggregator(uint32_t nworkers, ViewFunc &vf)
-      : values(nworkers),
-        handles(nworkers),
-        flag({false, false}),
-        viewer(vf),
-        latest_result(ViewType())
-    {}
-    SVAggregator(SVAggregator &) = delete;
-    ~SVAggregator() { for (auto handle : handles) delete handle; }
+    using AggHandle = SVAggHandle<AggValueT, onthefly, stoppable, ViewFunc, Output>;
   
     AggValueT global;
     std::vector<std::atomic<SVAggItem<AggValueT>>> values;
@@ -38,6 +30,18 @@ namespace Peregrine
     std::atomic<flag_t> flag;
     ViewFunc viewer;
     std::atomic<ViewType> latest_result;
+
+    SVAggregator(uint32_t nworkers, ViewFunc &vf)
+      : values(nworkers),
+        handles(nworkers),
+        flag({false, false}),
+        viewer(vf),
+        latest_result(ViewType())
+    {}
+
+
+    SVAggregator(SVAggregator &) = delete;
+    ~SVAggregator() { for (auto handle : handles) delete handle; }
   
     bool stale(uint32_t id) const
     {
@@ -109,18 +113,20 @@ namespace Peregrine
     }
   };
   
-  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc>
+  template <typename AggValueT, OnTheFlyOption onthefly, StoppableOption stoppable, typename ViewFunc, OutputOption Output>
   struct SVAggHandle
   {
     using ViewType = decltype(std::declval<ViewFunc>()(std::declval<AggValueT>()));
-    using Aggregator = SVAggregator<AggValueT, onthefly, stoppable, ViewFunc>;
+    using Aggregator = SVAggregator<AggValueT, onthefly, stoppable, ViewFunc, Output>;
     AggValueT curr;
     AggValueT other;
   
     uint32_t id;
     Aggregator *agg;
     Barrier &barrier;
-  
+
+    OutputManager<Output> bm;
+
     SVAggHandle(uint32_t tid, Aggregator *a, Barrier &b) : id(tid), agg(a), barrier(b) {}
   
     void map(const std::vector<uint32_t> &, const auto &v)
@@ -132,6 +138,10 @@ namespace Peregrine
     {
       curr.reset();
       other.reset();
+      if constexpr (Output != NONE)
+      {
+        bm.reset(id);
+      }
     }
   
     ViewType read_value(const std::vector<uint32_t> &)
@@ -139,7 +149,8 @@ namespace Peregrine
       return agg->latest_result.load();
     }
   
-    void stop()
+
+    void stop() requires (stoppable == STOPPABLE)
     {
       barrier.stopAll();
     }
@@ -156,6 +167,18 @@ namespace Peregrine
         // set freshness
         agg->set_fresh(id);
       }
+
+      if constexpr (Output != NONE)
+      {
+        // flush output buffer
+        bm.flush();
+      }
+    }
+
+    template <OutputFormat fmt> requires (Output != NONE)
+    void output(const std::vector<uint32_t> &vertices)
+    {
+      bm.template output<fmt>(vertices);
     }
   };
 }

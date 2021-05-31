@@ -11,6 +11,7 @@
 #include "integrationtests/DataConverter_test.hh"
 #include "integrationtests/EarlyTermination_test.hh"
 #include "integrationtests/OnTheFly_test.hh"
+#include "integrationtests/Output_test.hh"
 
 int main()
 {

@@ -23,6 +23,9 @@ existence-query: apps/existence-query.cc $(OBJ) bliss
 count: apps/count.cc $(OBJ) bliss
 	$(CC) apps/count.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
 
+output: apps/output.cc $(OBJ) bliss
+	$(CC) apps/output.cc $(OBJ) -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) $(CFLAGS)
+
 test: core/test.cc $(OBJ) core/DataConverter.o core/roaring.o bliss
 	$(CC) core/test.cc -DTESTING $(OBJ) core/DataConverter.o core/roaring.o -o $(OUTDIR)/$@ $(BLISS_LDFLAGS) $(LDFLAGS) -lUnitTest++ $(CFLAGS)
 

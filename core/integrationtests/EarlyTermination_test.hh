@@ -3,13 +3,16 @@
 TEST(EarlyTerminationIntegration)
 {
   const std::string data_graph_name("data/citeseer");
-  size_t nthreads = std::thread::hardware_concurrency();
 
   std::cout << "RUNNING EARLY TERMINATION INTEGRATION TEST" << std::endl;
 
   auto t1 = utils::get_timestamp();
 
   {
+    // in multi-threaded execution, no guarantee the other threads haven't
+    // finished processing all remaining tasks before receiving stop() signal.
+    // So just use one thread.
+    size_t nthreads = 1;
     // maximum clique in citeseer
     uint32_t k = 6;
     Peregrine::SmallGraph kclique = Peregrine::PatternGenerator::clique(k);
@@ -27,6 +30,8 @@ TEST(EarlyTerminationIntegration)
   }
 
   {
+    // since we don't expect to find the pattern, we use all threads: can't get a race
+    size_t nthreads = std::thread::hardware_concurrency();
     // larger than maximum clique in citeseer
     uint32_t k = 7;
     Peregrine::SmallGraph kclique = Peregrine::PatternGenerator::clique(k);

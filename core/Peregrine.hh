@@ -401,10 +401,14 @@ namespace Peregrine
   template <typename T>
   T default_viewer(T v) { return v; }
 
-  template <OutputOption Output, typename VF, typename GivenAggValueT>
+  template <typename AggKeyT>
+  using OutputKeyType = std::conditional_t<std::is_same_v<AggKeyT, Pattern>, SmallGraph, AggKeyT>;
+
+  template <OutputOption Output, typename VF, typename AggKeyT, typename GivenAggValueT>
   using ResultType = std::conditional_t<Output == DISK,
       std::vector<std::tuple<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>())), std::filesystem::path>>,
-      std::vector<std::pair<SmallGraph, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>>>;
+      std::vector<std::pair<OutputKeyType<AggKeyT>, decltype(std::declval<VF>()(std::declval<GivenAggValueT>()))>>>;
+
 
   template <
     typename AggKeyT,
@@ -416,7 +420,7 @@ namespace Peregrine
     typename VF = decltype(default_viewer<GivenAggValueT>),
     OutputOption Output = NONE
   >
-  ResultType<Output, VF, GivenAggValueT>
+  ResultType<Output, VF, AggKeyT, GivenAggValueT>
   match(DataGraphT &&data_graph,
       const std::vector<SmallGraph> &patterns,
       uint32_t nworkers,
@@ -460,7 +464,7 @@ namespace Peregrine
                 << "\n";
     }
 
-    ResultType<Output, VF, GivenAggValueT> result;
+    ResultType<Output, VF, AggKeyT, GivenAggValueT> result;
 
     // optimize AggKeyT == Pattern
     if constexpr (std::is_same_v<AggKeyT, Pattern>)
@@ -508,7 +512,7 @@ namespace Peregrine
     }
     else
     {
-      result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable>(process, view, nworkers, patterns);
+      result = match_multi<AggKeyT, AggValueT, OnTheFly, Stoppable, Output>(process, view, nworkers, patterns);
     }
 
     if constexpr (!std::is_same_v<std::decay_t<DataGraphT>, DataGraph> && !std::is_same_v<std::decay_t<DataGraphT>, DataGraph *>)
@@ -520,11 +524,11 @@ namespace Peregrine
   }
 
   template <typename AggKeyT, typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
-  ResultType<Output, VF, AggValueT>
+  ResultType<Output, VF, AggKeyT, AggValueT>
   match_multi
   (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
   {
-    ResultType<Output, VF, AggValueT> results;
+    ResultType<Output, VF, AggKeyT, AggValueT> results;
 
     if (patterns.empty()) return results;
 
@@ -639,13 +643,20 @@ namespace Peregrine
 
       for (auto &[k, v] : aggregator.latest_result)
       {
-        if constexpr (Output == DISK)
+        if constexpr (std::is_same_v<AggKeyT, Pattern>)
         {
-          results.emplace_back(SmallGraph(p, k), v, OutputManager<DISK>::get_path());
+          if constexpr (Output == DISK)
+          {
+            results.emplace_back(SmallGraph(p, k), v, OutputManager<DISK>::get_path());
+          }
+          else
+          {
+            results.emplace_back(SmallGraph(p, k), v);
+          }
         }
         else
         {
-          results.emplace_back(SmallGraph(p, k), v);
+          results.emplace_back(k, v);
         }
       }
     }
@@ -669,11 +680,11 @@ namespace Peregrine
   }
 
   template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
-  ResultType<Output, VF, AggValueT>
+  ResultType<Output, VF, Pattern, AggValueT>
   match_single
   (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
   {
-    ResultType<Output, VF, AggValueT> results;
+    ResultType<Output, VF, Pattern, AggValueT> results;
 
     if (patterns.empty()) return results;
 
@@ -814,11 +825,11 @@ namespace Peregrine
   }
 
   template <typename AggValueT, OnTheFlyOption OnTheFly, StoppableOption Stoppable, OutputOption Output, typename PF, typename VF>
-  ResultType<Output, VF, AggValueT>
+  ResultType<Output, VF, Pattern, AggValueT>
   match_vector
   (PF &&process, VF &&viewer, uint32_t nworkers, const std::vector<SmallGraph> &patterns)
   {
-    ResultType<Output, VF, AggValueT> results;
+    ResultType<Output, VF, Pattern, AggValueT> results;
 
     if (patterns.empty()) return results;
 

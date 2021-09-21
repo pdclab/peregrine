@@ -12,7 +12,7 @@ Peregrine is an efficient, single-machine system for performing data mining task
 Peregrine is highly programmable, so you can easily develop your own graph mining applications using its novel, declarative, graph-pattern-centric API.
 To write a Peregrine program, you describe which graph patterns you are interested in mining, and what to do with each occurrence of those patterns. You provide the _what_ and the runtime handles the _how_.
 
-For full details, you can read our paper published in [EuroSys 2020](https://dl.acm.org/doi/abs/10.1145/3342195.3387548) or the longer version on [arXiv](https://arxiv.org/abs/2004.02369).
+For full details, you can read our paper published in [EuroSys 2020](https://dl.acm.org/doi/abs/10.1145/3342195.3387548) or the longer version on [arXiv](https://arxiv.org/abs/2004.02369). For a deeper look at optimizations under the hood, check out our article in the [2021 ACM Operating Systems Review](https://dl.acm.org/doi/abs/10.1145/3469379.3469381).
 
 For an in-depth summary, watch the video presentation:
 

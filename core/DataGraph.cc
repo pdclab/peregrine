@@ -77,17 +77,18 @@ namespace Peregrine
       input_graph.read(reinterpret_cast<char *>(&vertex_count), sizeof(vertex_count));
       input_graph.read(reinterpret_cast<char *>(&edge_count), sizeof(edge_count));
 
-      // don't count the header (two 32-bit integers)
       uint64_t file_size = std::filesystem::file_size(data_path);
       assert(file_size % 4 == 0);
       uint64_t data_count = file_size / 4;
-      graph_in_memory = std::make_unique<uint32_t[]>(data_count - 2);
+      // don't count the header (num vertices - 32-bit integer, num edges - 64-bit integer)
+      uint64_t body_count = data_count-3;
+      graph_in_memory = std::make_unique<uint32_t[]>(body_count);
 
       uint64_t curr_read_offset = 0;
       uint64_t read_batch_size = 2147479552;
-      while (curr_read_offset/4 <= data_count - 2)
+      while (curr_read_offset/4 <= body_count)
       {
-        input_graph.read(reinterpret_cast<char *>(graph_in_memory.get() + curr_read_offset/4), std::min(read_batch_size, (data_count-2)*4-curr_read_offset));
+        input_graph.read(reinterpret_cast<char *>(graph_in_memory.get() + curr_read_offset/4), std::min(read_batch_size, (body_count)*4-curr_read_offset));
         curr_read_offset += read_batch_size;
       }
 

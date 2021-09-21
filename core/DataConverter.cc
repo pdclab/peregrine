@@ -20,7 +20,7 @@ namespace Peregrine
 {
   namespace DataConverter
   {
-    const unsigned nthreads = std::thread::hardware_concurrency();
+    unsigned nthreads = std::thread::hardware_concurrency();
     bool is_directory(const std::string &path)
     {
       struct stat statbuf;
@@ -232,6 +232,15 @@ namespace Peregrine
       auto t3 = utils::get_timestamp();
       {
         size_t task_size = edge_file_size / nthreads;
+        if (task_size == 0)
+        {
+          task_size = edge_file_size;
+          nthreads = 1;
+          edge_counts.resize(1);
+          degree_maps.resize(1);
+          max_vids.resize(1);
+        }
+
         std::vector<std::thread> pool;
         for (unsigned i = 0; i < nthreads; ++i)
         {
@@ -250,27 +259,16 @@ namespace Peregrine
     
       uint32_t max_vid = *std::max_element(max_vids.cbegin(), max_vids.cend());
     
-      // find biggest per-thread degree map to use as the final degree map
-      std::vector<uint32_t> &degree_map = *std::max_element(degree_maps.begin(),
-          degree_maps.end(),
-          [](auto &v1, auto &v2) { return v1.size() < v2.size(); });
-    
-      degree_map.resize(max_vid+1);
-    
       // sum up degrees
+      std::vector<uint32_t> degree_map(max_vid+1);
       {
-        std::for_each(std::execution::par_unseq, degree_map.begin(), degree_map.end(),
-            [&degree_maps, &degree_map](uint32_t &total)
-            {
-              uint32_t v = &total - &degree_map[0];
-              uint32_t prev_total = total;
-              total = 0;
-              for (auto &map : degree_maps)
-              {
-                total += map[v];
-              }
-              total += prev_total;
-            });
+        for (const auto &map : degree_maps)
+        {
+          std::transform(std::execution::par,
+              map.cbegin(), map.cend(),
+              degree_map.begin(), degree_map.begin(),
+              std::plus<uint32_t>());
+        }
       }
     
       uint64_t num_edges = std::accumulate(edge_counts.cbegin(), edge_counts.cend(), 0);

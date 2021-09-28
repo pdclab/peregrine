@@ -430,4 +430,22 @@ If you use this software project, please cite:
   location = {Heraklion, Greece},
   series = {EuroSys ’20}
 }
+
+@article{10.1145/3469379.3469381,
+  author = {Jamshidi, Kasra and Vora, Keval},
+  title = {A Deeper Dive into Pattern-Aware Subgraph Exploration with PEREGRINE},
+  year = {2021},
+  issue_date = {July 2021},
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  volume = {55},
+  number = {1},
+  issn = {0163-5980},
+  url = {https://doi.org/10.1145/3469379.3469381},
+  doi = {10.1145/3469379.3469381},
+  journal = {SIGOPS Oper. Syst. Rev.},
+  month = jun,
+  pages = {1–10},
+  numpages = {10}
+}
 ```

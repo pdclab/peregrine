@@ -264,8 +264,11 @@ namespace Peregrine
       {
         for (const auto &map : degree_maps)
         {
+          auto end = std::distance(map.cbegin(), map.cend()) > max_vid+1
+            ? std::next(map.cbegin(), max_vid+1)
+            : map.cend();
           std::transform(std::execution::par,
-              map.cbegin(), map.cend(),
+              map.cbegin(), end,
               degree_map.begin(), degree_map.begin(),
               std::plus<uint32_t>());
         }

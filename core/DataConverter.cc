@@ -45,7 +45,7 @@ namespace Peregrine
      * task_size gives the approx. number of bytes to process per thread.
      * This is adjusted to the nearest line.
      */
-    void calculate_degree_map(unsigned thread_id, const char *graph, size_t file_size, size_t task_size, uint64_t &num_edges, std::vector<uint32_t> &degree_maps, uint32_t &max_vid)
+    void calculate_degree_map(unsigned thread_id, const char *graph, size_t file_size, size_t task_size, std::vector<uint32_t> &degree_maps, uint32_t &max_vid)
     {
       // estimate number of vertices based on file_size
       uint32_t vertex_count_estimate = 4096;
@@ -120,7 +120,6 @@ namespace Peregrine
       }
     
       // return thread-local degree map
-      num_edges = edges;
       max_vid = max;
       degree_maps.swap(degree_map);
     }
@@ -226,7 +225,6 @@ namespace Peregrine
     
     
       // calculate degree maps
-      std::vector<uint64_t> edge_counts(nthreads);
       std::vector<std::vector<uint32_t>> degree_maps(nthreads);
       std::vector<uint32_t> max_vids(nthreads);
       auto t3 = utils::get_timestamp();
@@ -236,7 +234,6 @@ namespace Peregrine
         {
           task_size = edge_file_size;
           nthreads = 1;
-          edge_counts.resize(1);
           degree_maps.resize(1);
           max_vids.resize(1);
         }
@@ -246,7 +243,6 @@ namespace Peregrine
         {
           pool.emplace_back(calculate_degree_map, i, graph_data, edge_file_size,
               task_size,
-              std::ref(edge_counts[i]),
               std::ref(degree_maps[i]),
               std::ref(max_vids[i]));
         }
@@ -273,8 +269,6 @@ namespace Peregrine
               std::plus<uint32_t>());
         }
       }
-    
-      uint64_t num_edges = std::accumulate(edge_counts.cbegin(), edge_counts.cend(), 0);
     
       auto t4 = utils::get_timestamp();
       utils::Log{} << "Calculated degree map in " << (t4-t3)/1e6 << "s" << "\n";
@@ -348,17 +342,26 @@ namespace Peregrine
       auto t8 = utils::get_timestamp();
       utils::Log{} << "Created in-memory graph in " << (t8-t7)/1e6 << "s" << "\n";
     
+      std::atomic<uint64_t> num_edges_ = 0;
+
       // sort the in-memory adjacency lists
       auto t9 = utils::get_timestamp();
       std::for_each(std::execution::par_unseq, ids_map.cbegin(), ids_map.cend(),
-          [&graph, &ids_rev_map](uint32_t true_v)
+          [&num_edges_, &graph, &ids_rev_map](uint32_t true_v)
           {
             uint32_t v = ids_rev_map[true_v];
             std::sort(std::execution::unseq, graph[v].ptr, graph[v].ptr + graph[v].length);
+            // deduplicate
+            auto end = std::unique(graph[v].ptr, graph[v].ptr + graph[v].length);
+            graph[v].length = std::distance(graph[v].ptr, end);
+            // add the degree
+            num_edges_ += graph[v].length;
           });
       auto t10 = utils::get_timestamp();
-      utils::Log{} << "Sorted adjacency lists in " << (t10-t9)/1e6 << "s" << "\n";
+      utils::Log{} << "Sorted adjacency lists and deduplicated edges in " << (t10-t9)/1e6 << "s" << "\n";
     
+      uint64_t num_edges = num_edges_ / 2;
+
       // write thread-local files
       auto t11 = utils::get_timestamp();
       {

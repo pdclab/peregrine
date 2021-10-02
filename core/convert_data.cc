@@ -1,24 +1,8 @@
 #include <iostream>
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-
+#include <filesystem>
+#include <string>
 
 #include "DataConverter.hh"
-
-bool is_directory(const std::string &path)
-{
-  struct stat statbuf;
-  return (stat(path.c_str(), &statbuf) == 0) && S_ISDIR(statbuf.st_mode);
-}
-
-bool file_exists(const std::string &path)
-{
-  struct stat statbuf;
-  return (stat(path.c_str(), &statbuf) == 0);
-}
 
 int main(int argc, char *argv[])
 {
@@ -35,26 +19,36 @@ int main(int argc, char *argv[])
   std::string label_file(argc == 4 ? argv[2] : "");
   std::string out_dir(argc == 4 ? argv[3] : argv[2]);
 
-  if (!file_exists(edge_file))
+  if (!std::filesystem::exists(edge_file))
   {
     std::cerr
       << "ERROR: " << edge_file << " could not be opened."
       << std::endl;
     return -1;
   }
-  else if (argc == 4 && !file_exists(label_file))
+  else if (argc == 4 && !std::filesystem::exists(label_file))
   {
     std::cerr
       << "ERROR: " << label_file << " could not be opened."
       << std::endl;
     return -1;
   }
-  else if (!is_directory(out_dir))
+  else if (!std::filesystem::is_directory(out_dir))
   {
-    std::cerr
-      << "ERROR: " << out_dir << " is not a valid directory."
-      << std::endl;
-    return -1;
+    if (std::filesystem::exists(out_dir))
+    {
+      std::cerr
+        << "ERROR: " << out_dir << " already exists and is not a directory."
+        << std::endl;
+      return -1;
+    }
+    else if (!std::filesystem::create_directory(out_dir))
+    {
+      std::cerr
+        << "ERROR: could not create directory " << out_dir << "."
+        << std::endl;
+      return -1;
+    }
   }
 
   Peregrine::DataConverter::convert_data(edge_file, label_file, out_dir);

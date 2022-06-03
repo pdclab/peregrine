@@ -106,6 +106,7 @@ class OutputManager<DISK>
               }
               else if (ptr == &buf[PRG_OUTPUT_BLOCK_SIZE]) // ptr is past-the-end, so we aren't out of space at BLOCK_SIZE-1
               {
+                bufsz += std::distance(&buf[bufsz], ptr); // write what you can before flushing
                 flush(); // make room for comma
                 assert(bufsz == 0);
                 ptr = &buf[bufsz]; // reset ptr: it pointed past-the-end

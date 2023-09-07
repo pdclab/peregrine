@@ -383,7 +383,9 @@ To convert an unlabeled dataset, `labels.txt` can be omitted.
 
 ## 4. Reproducing our EuroSys 2020 paper results
 
-See [the guide](experiments-guide.md).
+See [the guide](https://github.com/pdclab/peregrine/blob/eurosys20-experiments/experiments-guide.md).
+
+Note that these instructions and datasets only work with the `eurosys20-experiments` branch.
 
 ## 5. Contributing
 

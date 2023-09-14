@@ -24,7 +24,7 @@ install_command() {
 
 install_pkg() {
   title $1
-    if ! dpkg -l | grep -q g++-10; then
+    if ! dpkg -l | grep -q $1; then
         error $1
         sudo apt install $1 -y
     fi  
@@ -33,8 +33,8 @@ install_pkg() {
 
 echo "Downloading required repos"
 
-sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-sudo apt-get update -y
+#sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+#sudo apt-get update -y
 
 install_command gcc
 

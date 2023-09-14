@@ -1,5 +1,4 @@
 #!/bin/bash
-#!/bin/bash
 
 error() {
     echo "************************"
@@ -33,8 +32,8 @@ install_pkg() {
 
 echo "Downloading required repos"
 
-#sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
-#sudo apt-get update -y
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+sudo apt-get update -y
 
 install_command gcc
 

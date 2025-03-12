@@ -357,8 +357,7 @@ You can output matches in CSV or binary formats (`Peregrine::CSV` or `Peregrine:
 
 Peregrine's data processor ingests graph edge-lists and stores them in binary
 adjacency-list format. For labeled data graphs, a separate file of vertex-label
-pairs is used. Both vertex ID's and labels should be unsigned 32-bit integers.
-
+pairs is used. Both vertex ID's and labels should be unsigned 32-bit integers. Vertex ID's are expected to be in the interval [1, vertex_count].
 
 Edge-list file format:
 ```

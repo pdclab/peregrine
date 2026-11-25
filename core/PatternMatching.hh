@@ -343,7 +343,7 @@ namespace Peregrine
   template <bool HAV, StoppableOption stoppable, typename Func>
   struct Matcher
   {
-    Matcher(std::stop_token stoken, const AnalyzedPattern &r, const DataGraph * const dg, uint8_t vgsi, std::vector<std::vector<uint32_t>> &cands, const Func &f)
+    Matcher(std::stop_token stoken, const AnalyzedPattern &r, const DataGraph * const dg, uint32_t vgsi, std::vector<std::vector<uint32_t>> &cands, const Func &f)
       : stoken(stoken), rbi(r), vgsi(vgsi), vgs(rbi.vgs[vgsi]), gpb(dg), qo(rbi.qo_book[vgsi]), cands(cands), user_process(f) {}
 
     template <bool HAE, Graph::Labelling L>
@@ -1412,7 +1412,7 @@ namespace Peregrine
   template <bool HAV>
   struct Counter
   {
-    Counter(const AnalyzedPattern &r, const DataGraph * const dg, uint8_t vgsi, std::vector<std::vector<uint32_t>> &cands)
+    Counter(const AnalyzedPattern &r, const DataGraph * const dg, uint32_t vgsi, std::vector<std::vector<uint32_t>> &cands)
       : rbi(r), vgsi(vgsi), vgs(rbi.vgs[vgsi]), gpb(dg), qo(rbi.qo_book[vgsi]), cands(cands)
     {
       assert(!r.has_anti_edges()); // Counter doesn't support it!
